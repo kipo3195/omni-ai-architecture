@@ -1,5 +1,6 @@
 # Client Integration
 
+> Role: Client Context / Client Tool을 Workflow 또는 Agent가 사용할 수 있는 Provider 계층으로 설명하는 문서  
 > Status: Designed  
 > 이 문서는 Client Integration을 Workflow / Agent와 같은 실행 방식이 아니라 Context / Tool Provider 계층으로 설명한다.
 
@@ -199,4 +200,3 @@ Client Tool Calling은 Client 상태에 영향을 받는다.
 - Partial Result 또는 Fallback
 
 Status: Planned
-

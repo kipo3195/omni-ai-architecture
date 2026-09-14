@@ -1,5 +1,6 @@
 # AiTask and Queue
 
+> Role: AiTask 모델, Queue 진입 조건, Queue 이후 실행 경계를 설명하는 문서  
 > Status: Designed  
 > 이 문서는 AiTask와 AI Task Queue의 실행 경계를 설명한다. Queue 운영 구현 완료를 의미하지 않는다.
 
@@ -160,4 +161,3 @@ Execution Policy는 이미 승인된 Task의 실행 안정성을 다룬다.
 - failure handling
 
 Status: Designed
-

@@ -1,5 +1,6 @@
 # Roadmap
 
+> Role: 구현 순서와 진행 상태를 관리하는 문서  
 > Status: Planned  
 > 이 문서는 README의 Roadmap을 확장한 구현 순서이다. 완료된 구현 목록이 아니다.
 
@@ -146,4 +147,3 @@ maxTokens
 | Phase 3 | Client Integration | Planned |
 | Phase 4 | Agent Runtime | Planned |
 | Phase 5 | Context Store / Cache / Observability | Planned |
-

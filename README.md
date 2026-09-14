@@ -349,17 +349,25 @@ docs/
 ├─ ai-task-and-queue.md
 ├─ client-integration.md
 ├─ design-decisions.md
-└─ roadmap.md
+├─ roadmap.md
+├─ decisions/
+│  └─ README.md
+└─ notes/
+   ├─ README.md
+   ├─ phase-1-server-driven.md
+   └─ troubleshooting.md
 ```
 
-| Document | Description |
-| --- | --- |
-| [Architecture](docs/architecture.md) | 전체 구조와 Layer별 책임 |
-| [Server-driven AI](docs/server-driven-ai.md) | Business Event와 Policy 기반 AI 실행 구조 |
-| [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask 모델과 Queue 실행 경계 |
-| [Client Integration](docs/client-integration.md) | Client Context와 Tool Calling 구조 |
-| [Design Decisions](docs/design-decisions.md) | 주요 설계 판단과 Trade-off |
-| [Roadmap](docs/roadmap.md) | 단계별 구현 계획 |
+| Document | Role | When to update |
+| --- | --- | --- |
+| [Architecture](docs/architecture.md) | 전체 구조, Layer 책임, 실행 축을 설명하는 기준 문서 | 책임 경계, 실행 흐름, Runtime 구조가 바뀔 때 |
+| [Server-driven AI](docs/server-driven-ai.md) | Business Event / Client Request가 AiTask로 전환되는 흐름 설명 | Trigger, Handler, Policy 조합 방식이 바뀔 때 |
+| [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask 모델과 Queue 실행 경계 설명 | Task schema, queue, retry, workload 정책이 바뀔 때 |
+| [Client Integration](docs/client-integration.md) | Client Context / Client Tool을 Provider로 연결하는 방식 설명 | Client Tool, Gateway, correlation, timeout 구조가 바뀔 때 |
+| [Design Decisions](docs/design-decisions.md) | 주요 설계 결정의 요약 인덱스 | 핵심 설계 판단이 추가되거나 방향이 바뀔 때 |
+| [Roadmap](docs/roadmap.md) | 구현 순서와 진행 상태 관리 | Phase 상태나 개발 순서가 바뀔 때 |
+| [Decisions](docs/decisions/README.md) | 개별 ADR을 모으는 디렉터리 | 되돌리기 어려운 기술 / 설계 결정을 기록할 때 |
+| [Notes](docs/notes/README.md) | 개발 중 메모, 트러블슈팅, Phase별 회고를 모으는 디렉터리 | 구현 중 문제, 해결, 회고, 실험 결과가 생길 때 |
 
 ---
 

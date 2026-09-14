@@ -1,5 +1,6 @@
 # Server-driven AI
 
+> Role: Business Event / Client Request가 Java Messenger Backend의 Policy를 거쳐 AiTask로 전환되는 흐름을 설명하는 문서  
 > Status: Designed  
 > 이 문서는 Java Messenger Backend가 Business Event와 Client Request를 AI 실행 후보로 받아 `SKIP / EXECUTE`를 판단하는 구조를 설명한다.
 
@@ -220,4 +221,3 @@ Execution Policy는 Queue 이후의 실행 안정성을 다룬다.
 - backpressure
 
 Status: Designed
-

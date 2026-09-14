@@ -1,5 +1,6 @@
 # Architecture
 
+> Role: 전체 시스템 구조, Layer별 책임, 실행 방식과 Provider 축을 설명하는 기준 문서  
 > Status: Designed  
 > 이 문서는 README의 구조를 확장해 Omni AI Platform의 전체 책임 분리와 실행 흐름을 설명한다. 운영 구현 완료를 의미하지 않는다.
 
@@ -193,4 +194,3 @@ Status: Designed
 | Agent Runtime / Runtime Tool Calling | Planned |
 | Workload Queue Separation | Planned |
 | Context Store / Cache / Observability | Planned |
-

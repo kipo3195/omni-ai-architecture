@@ -1,5 +1,6 @@
 # Design Decisions
 
+> Role: 주요 설계 결정의 요약 인덱스이며, 자세한 개별 결정은 `docs/decisions/`에 ADR로 기록한다.  
 > Status: Designed  
 > 이 문서는 README의 Core Design을 기준으로 주요 설계 판단과 Trade-off를 정리한다.
 
@@ -128,4 +129,3 @@ Trade-off
 → 초기 Queue 하나에서는 서로 다른 workload가 같은 실행 자원을 공유한다.
 
 Status: Designed
-
