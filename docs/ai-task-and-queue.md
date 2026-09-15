@@ -71,7 +71,7 @@ AiTask
   - raw file content
 ```
 
-대용량 Context는 Context Store, read-only DB / Redis, 원본 저장소, 또는 `realtime-message-service`, `user-service`, `auth-service`, `file-service` API에서 조회하는 방향으로 둔다.
+대용량 Context는 AiTask payload에 직접 싣지 않고 Context Store, Service API / gRPC, 또는 명시적으로 계약된 Projection에서 조회하는 방향으로 둔다. Domain Service가 소유한 DB / Redis를 `ai-orchestrator`가 직접 읽는 방식은 기본 전략으로 두지 않는다.
 
 Status: Designed
 

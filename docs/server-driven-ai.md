@@ -292,7 +292,7 @@ Status: Designed
 
 `ai-orchestrator`가 모든 Service를 매번 동기 RPC로 호출하는 synchronous fan-out 구조는 지양한다.
 
-읽기 중심이고 일정 수준의 stale을 허용할 수 있는 AI Context는 read-only DB / Redis 조회를 허용할 수 있다.
+각 Domain Service가 소유한 AI Context는 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 조회한다. 일정 수준의 stale을 허용할 수 있는 Context도 `ai-orchestrator`가 Domain DB / Redis를 직접 읽는 방식이 아니라, Service가 제공하는 read API나 event-driven Projection으로 제공하는 방향을 우선한다.
 
 예:
 
@@ -300,7 +300,17 @@ Status: Designed
 - unread count
 - presence snapshot
 - 최근 room 목록
-- AI 실행 기록
+
+`ai-orchestrator`가 직접 DB / Redis를 사용할 수 있는 범위는 자신이 소유한 실행 조정 상태다.
+
+예:
+
+- cooldown
+- deduplication key
+- execution correlation
+- AI task status / execution metadata
+- retry / backoff state
+- conversation metadata
 
 권한, 강제 차단 상태, Tenant Policy, 파일 접근 권한처럼 강한 정합성이 필요한 판단은 해당 Service API / gRPC를 통해 확인한다.
 
@@ -311,7 +321,7 @@ realtime-message-service / user-service / auth-service / file-service
 = Source of Truth
 
 ai-orchestrator
-= Read-only Consumer / Coordination Boundary
+= Owner of AI Coordination State / Coordination Boundary
 ```
 
 Status: Designed

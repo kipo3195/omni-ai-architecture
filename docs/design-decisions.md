@@ -40,7 +40,7 @@ Status: Designed
 → State ownership이 흐려지면 권한, 상태 변경, 정책 판단이 중복되고 Cross-service dependency가 빠르게 증가한다.
 
 Trade-off
-→ `ai-orchestrator`는 필요한 Context를 read-only로 조회하거나 해당 Service API / gRPC를 통해 확인해야 한다.
+→ `ai-orchestrator`는 각 Domain Service가 소유한 상태를 직접 DB / Redis로 조회하지 않고, 해당 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 확인해야 한다. 단, cooldown, deduplication, execution correlation처럼 `ai-orchestrator`가 소유한 실행 조정 상태는 자체 DB / Redis에 저장하고 직접 조회할 수 있다.
 
 Status: Designed
 

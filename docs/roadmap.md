@@ -118,8 +118,8 @@ Status: Planned
 
 목표:
 
-- Read-only DB / Redis context access 범위 검토
-- AI Context Projection 검토
+- Service API / gRPC 기반 AI Context 조회 계약 검토
+- Event-driven AI Context Projection 적용 범위 검토
 - workload별 Queue / Consumer / Worker 분리 검토
 - Exact Cache
 - Semantic Cache 적용 범위 검토

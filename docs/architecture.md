@@ -131,7 +131,7 @@ omni-ai-server
 → Prompt / Workflow / LangGraph / LLM Execution / Conversation History / Agent State
 ```
 
-`ai-orchestrator`는 사용자 상태, 메시지 상태, 인증 상태, 파일 상태의 Source of Truth가 아니다. Domain DB나 Redis를 조회해야 하는 경우에도 read-only consumer로 동작하고, 권한이나 파일 접근 정책처럼 강한 정합성이 필요한 판단은 해당 Service API / gRPC를 통해 확인한다.
+`ai-orchestrator`는 사용자 상태, 메시지 상태, 인증 상태, 파일 상태의 Source of Truth가 아니다. 각 Domain Service가 소유한 상태는 해당 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 조회한다. `ai-orchestrator`가 직접 DB / Redis를 사용하는 범위는 cooldown, deduplication, execution correlation, conversation metadata처럼 자신이 소유한 실행 조정 상태로 제한한다.
 
 Status: Designed
 
