@@ -86,4 +86,4 @@ Status: Proposed | Accepted | Superseded
 
 ## Index
 
-아직 작성된 ADR은 없다.
+- [001. Session Registry Based AI Result Routing](001-session-registry-result-routing.md)

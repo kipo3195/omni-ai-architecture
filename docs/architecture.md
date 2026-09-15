@@ -348,7 +348,7 @@ omni-ai-server ↔ realtime-message-service Client Tool Relay
 = Internal RPC
 ```
 
-통일하는 대상은 Transport가 아니라 `triggerId`, `taskId`, `executionId`, `conversationId`, `toolCallId` 같은 실행 계약과 식별자이다.
+통일하는 대상은 Transport가 아니라 `triggerId`, `taskId`, `executionId`, `conversationId`, `connectionId`, `roomSessionId`, `toolCallId` 같은 실행 계약과 식별자이다.
 
 `ai-orchestrator`가 관리하는 Control Path:
 
@@ -394,7 +394,7 @@ Instance Restart
 Session Migration
 ```
 
-최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다.
+최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다. `enterRoom`이나 Client explicit request를 처리한 instance는 correlation 정보로만 보고, `connectionId` / `roomSessionId`를 통해 Session Registry에서 현재 `ownerInstanceId`를 resolve한다.
 
 Status: Designed
 

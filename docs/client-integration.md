@@ -78,6 +78,8 @@ Client Tool Relay는 별도 서비스가 아니라 `realtime-message-service`의
 
 `ai-orchestrator`가 실행을 조정하는 경우에도 Client Tool 요청의 session, permission, connection 책임은 Client Tool Relay에 남긴다. Tool result payload는 `omni-ai-server`로 반환하고, `ai-orchestrator`에는 started / completed / failed 같은 lifecycle event만 보고할 수 있다.
 
+Client Tool Relay는 요청을 보낸 instance가 아니라 Session Registry의 현재 `ownerInstanceId`를 기준으로 target WebSocket session을 찾는다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다.
+
 Status: Designed
 
 ---
@@ -183,10 +185,14 @@ triggerId
 taskId
 executionId
 conversationId
+connectionId
+roomSessionId
 toolCallId
 ```
 
 Client Tool Response는 최소한 위 식별자로 원 요청과 연결될 수 있어야 한다.
+
+`connectionId`와 `roomSessionId`는 client location을 찾기 위한 routing correlation이다. Tool Response와 AI Stream Result 모두 최종 push 직전에 현재 Session Registry를 확인한다.
 
 Status: Designed
 
@@ -251,7 +257,8 @@ omni-ai-server
 `realtime-message-service` 책임:
 
 - Core NATS AI Stream 수신
-- Target WebSocket Session 탐색
+- Session Registry 또는 local session map을 통한 Target WebSocket Session 탐색
+- 현재 ownerInstanceId가 자신인지 확인
 - Messenger Client WebSocket Protocol로 변환
 - Client에 Stream Push
 

@@ -86,6 +86,8 @@ SKIP or EXECUTE
 
 Client Request는 직접 `omni-ai-server`로 전달되지 않는다.
 
+Client Request를 처리한 `realtime-message-service` instance가 최종 WebSocket delivery owner라고 가정하지 않는다. `enterRoom` 같은 요청에서는 `roomSessionId`를 만들고 현재 `connectionId` / `ownerInstanceId`와 연결하되, AI Result push 시점에는 Session Registry에서 현재 owner를 다시 확인한다.
+
 Status: Designed
 
 ---
@@ -154,6 +156,8 @@ Status: Designed
 Room Enter
   ↓
 realtime-message-service
+  ├─ roomSessionId 생성
+  ├─ connectionId / ownerInstanceId 연결
   ├─ FeatureEnabledPolicy
   ├─ CooldownPolicy
   ├─ TodayHiddenPolicy
@@ -161,6 +165,24 @@ realtime-message-service
   ↓
 AiTask(CONVERSATION_START)
 ```
+
+Status: Designed
+
+### Client Explicit AI Request
+
+```text
+Client AI Request
+  ↓
+realtime-message-service
+  ├─ Authentication / Session / Permission
+  ├─ Client Context Scope 확인
+  ├─ connectionId / roomSessionId correlation
+  └─ Trigger Policy
+  ↓
+AiTask(CLIENT_REQUESTED_AI)
+```
+
+명시적 Client 요청에서 생성된 AiTask도 `triggerId` / `taskId` / `executionId` 기준으로 실행한다. Result delivery는 request 처리 instance가 아니라 Session Registry의 현재 `ownerInstanceId` 기준으로 결정한다.
 
 Status: Designed
 

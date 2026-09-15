@@ -154,6 +154,31 @@ Status: Designed
 
 ---
 
+## AI Result는 Session Registry 기준으로 Routing한다
+
+결정
+→ Client explicit request나 Server trigger를 처리한 instance를 최종 delivery target으로 사용하지 않는다.
+
+→ WebSocket 연결 시 Connection Registry에 `connectionId`와 현재 `ownerInstanceId`를 등록하고, `enterRoom` 시 `roomSessionId`를 생성해 `connectionId` / `ownerInstanceId`와 연결한다.
+
+→ AI Result push 시점에는 `triggerId` / `taskId` / `executionId`로 실행 상태를 확인하고, `connectionId` / `roomSessionId` / `routingRef`를 통해 Session Registry에서 현재 `ownerInstanceId`를 resolve한 뒤 해당 `realtime-message-service` instance로만 전달한다.
+
+배경
+→ `enterRoom` API를 처리한 instance와 실제 WebSocket이 붙어 있는 instance가 다를 수 있다. AI 처리 중 reconnect, scale-out, scale-in, instance restart, session migration도 발생할 수 있다.
+
+이유
+→ Trigger source와 delivery owner를 분리해야 Client 명시 요청, room 진입 기반 AI, server-triggered AI, Client Tool Calling을 동일한 routing 원칙으로 처리할 수 있다.
+
+Trade-off
+→ Session Registry의 TTL, heartbeat, stale owner 제거, registry 조회 실패, result routing timeout, reconnect / resume 정책을 별도로 설계해야 한다.
+
+Related
+→ [ADR 001. Session Registry Based AI Result Routing](decisions/001-session-registry-result-routing.md)
+
+Status: Designed
+
+---
+
 ## ai-orchestrator는 Streaming Data Plane이 아니다
 
 결정
