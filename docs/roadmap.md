@@ -1,48 +1,54 @@
 # Roadmap
 
-> Role: 구현 순서와 진행 상태를 관리하는 문서  
-> Status: Planned  
+> Role: 구현 순서와 진행 상태를 관리하는 문서
+> Status: Planned
 > 이 문서는 README의 Roadmap을 확장한 구현 순서이다. 완료된 구현 목록이 아니다.
 
 ---
 
-## Phase 1. Server-driven 기본 구조
+## Phase 1. Current WS 연동과 Omni AI 기본 구조
 
 Status: Planned
 
 목표:
 
-- Java Handler / Service
+- 현재 WS service 연동
+- `ai-orchestrator` boundary 정의
+- `omni-ai-server` Task Router
 - Business Policy 조합
 - `SKIP / EXECUTE` 판단
 - AiTask 생성
-- AI Task Queue 연결
-- Omni AI Task Router
 - Conversation Start E2E
 
 검증 포인트:
 
 - Business Event와 AiTask 분리
-- Business Policy가 Queue 이전에 끝나는지
-- Queue가 Event Bus가 아니라 실행 경계로 동작하는지
+- 현재 WS service와 연동해도 `ai-orchestrator` / `omni-ai-server` 경계가 유지되는지
+- Single-domain Use Case가 과도하게 `ai-orchestrator`에 의존하지 않는지
+- `omni-ai-server`가 Business Rule을 소유하지 않는지
 
 ---
 
-## Phase 2. 공통 구조 재사용 검증
+## Phase 2. Cross-domain Trigger / Result Routing 검증
 
 Status: Planned
 
 목표:
 
-- 두 번째 Server-driven Use Case 적용
 - 상태 변경 기반 긴급 메시지 요약 또는 Label 기반 기능
-- 공통 AiTask / Queue / Workflow 구조 재사용 검증
+- NATS JetStream 기반 Business Event / AI Trigger 전달
+- `ai-orchestrator`의 Context Assembly
+- Cooldown / dedup / trigger expiration 정책
+- Core NATS 기반 Result Routing
+- `omni-ai-server → Core NATS → realtime-message-service` Streaming Data Path
 
 검증 포인트:
 
-- Task Type 추가 시 구조 변경이 작은지
-- Policy 조합이 기능별로 분리되는지
+- Trigger Consumer 장애 후 재처리가 가능한지
+- Trigger가 오래된 경우 실행을 skip할 수 있는지
+- Reconnect / scale-out 이후 현재 Session Owner로 결과가 전달되는지
 - Structured Result가 Delivery와 잘 연결되는지
+- `ai-orchestrator`가 token stream을 proxy하지 않는지
 
 ---
 
@@ -52,27 +58,32 @@ Status: Planned
 
 목표:
 
+- Server Tool Relay
 - Client Tool Registry
-- Java Tool Gateway
+- Client Tool Relay
 - WebSocket Tool Request / Response
 - Permission / Capability Check
-- `taskId / executionId / toolCallId` correlation
+- `triggerId / taskId / executionId / conversationId / toolCallId` correlation
 
 검증 포인트:
 
-- Client가 Omni AI와 직접 연결되지 않는지
+- Client가 `omni-ai-server`와 직접 연결되지 않는지
+- Server Tool Relay가 `auth-service` / `file-service` / `user-service` / `realtime-message-service` 경계를 지키는지
 - Client Tool이 최소 범위 Context만 반환하는지
 - Workflow Execution에서도 Client Integration을 사용할 수 있는지
 
 ---
 
-## Phase 4. Agent Runtime
+## Phase 4. Stateful Chatbot / Agent Runtime
 
 Status: Planned
 
 목표:
 
 - Runtime Tool Calling
+- Conversation Metadata Store
+- AI History Store
+- `conversationId + message` flow
 - 여러 차례 Tool Call
 - Agent Execution Lifecycle
 - Timeout / Retry
@@ -97,17 +108,19 @@ CANCELLED
 - Tool Decision이 Runtime 중 동적으로 가능한지
 - Tool Result correlation이 안정적인지
 - Client disconnect와 timeout을 처리할 수 있는지
+- WebSocket Session과 Conversation lifecycle이 분리되는지
 
 ---
 
-## Phase 5. Context Store / Cache / Observability
+## Phase 5. AI Context Projection / Cache / Observability
 
 Status: Planned
 
 목표:
 
-- Context Store 검토
-- workload별 Queue / Worker 분리 검토
+- Read-only DB / Redis context access 범위 검토
+- AI Context Projection 검토
+- workload별 Queue / Consumer / Worker 분리 검토
 - Exact Cache
 - Semantic Cache 적용 범위 검토
 - Observability
@@ -123,6 +136,7 @@ Status: Planned
 - Latency
 - Success / Failure
 - Timeout
+- Trigger Delay
 - Queue Delay
 - Cache Hit
 - Tool Call 횟수
@@ -142,8 +156,9 @@ maxTokens
 
 | Phase | Goal | Status |
 | --- | --- | --- |
-| Phase 1 | Server-driven 기본 구조와 Conversation Start E2E | Planned |
-| Phase 2 | 두 번째 Use Case로 공통 구조 재사용 검증 | Planned |
+| Phase 1 | Current WS 연동과 Omni AI 기본 구조 | Planned |
+| Phase 2 | Cross-domain Trigger / Result Routing 검증 | Planned |
 | Phase 3 | Client Integration | Planned |
-| Phase 4 | Agent Runtime | Planned |
-| Phase 5 | Context Store / Cache / Observability | Planned |
+| Phase 4 | Stateful Chatbot / Agent Runtime | Planned |
+| Phase 5 | AI Context Projection / Cache / Observability | Planned |
+| Future | WS service responsibility split | Planned |

@@ -1,373 +1,286 @@
 # Omni AI Platform
 
-> **Messenger Business Event를 AI 실행의 시작점으로 확장하고,  
-> Java Backend와 Omni AI Runtime을 분리해 다양한 AI 기능을 공통 구조에서 실행하기 위한 플랫폼 설계**
+> **Messenger Business Event를 AI 실행의 시작점으로 확장하고,
+> 현재 `WS service`와 연동되는 `ai-orchestrator`, `omni-ai-server`를 중심으로
+> 다양한 AI 기능을 공통 구조에서 실행하기 위한 플랫폼 설계**
 
 ![Status](https://img.shields.io/badge/status-designed-blue)
 ![Architecture](https://img.shields.io/badge/focus-architecture-informational)
 ![Backend](https://img.shields.io/badge/backend-Java-orange)
-![AI](https://img.shields.io/badge/AI-Omni%20Runtime-purple)
+![AI](https://img.shields.io/badge/AI-Python-purple)
 
 ---
 
 ## Why Omni AI?
 
-기존 Messenger AI는 보통 `/요약`, `/번역`, `/질문`처럼 **사용자의 직접 요청**에서 시작한다.
+기존 Messenger AI는 대부분 `/요약`, `/번역`, `/질문`처럼 **사용자가 AI 기능을 직접 호출하는 방식**으로 동작한다.
 
-Omni AI는 여기서 한 단계 확장해, Messenger가 이미 알고 있는 **Business Event, User State, Business Data**를 AI 실행의 시작점으로 활용한다.
+이 방식에서는 사용자가 먼저 상황을 인지하고, 어떤 AI 기능이 필요한지 판단한 뒤, 직접 AI에게 요청해야 한다.
 
-예를 들어:
+하지만 Messenger Backend는 이미 사용자의 업무 흐름을 이해할 수 있는 많은 정보를 가지고 있다.
 
-- 채팅방 진입 → 대화 시작 문장 추천
-- OFFLINE → ONLINE 상태 변경 → 자리비움 동안의 중요 메시지 요약
-- Label Matched → AI 판단 후 Popup / Push / Navigation / Voice 전달
+* 어떤 채팅방에 진입했는지
+* 얼마나 많은 메시지를 읽지 않았는지
+* 사용자가 자리를 비웠다가 복귀했는지
+* 어떤 메시지가 특정 Label이나 업무 조건에 해당하는지
+* 어떤 대화가 장시간 응답되지 않았는지
+* 어떤 Business Event가 발생했는지
 
-핵심은 **AI가 기능의 시작점이 되는 것이 아니라, Messenger Business Logic이 AI 실행 여부를 판단하는 것**이다.
+즉, **AI에게 다시 상황을 설명하지 않아도 Messenger는 이미 사용자의 현재 상태와 업무 Context를 알고 있다.**
+
+Omni AI는 이러한 정보를 AI의 입력 데이터로만 활용하는 것이 아니라,
+**AI가 필요한 순간을 Messenger가 판단하고 적절한 실행으로 연결하는 것**을 목표로 한다.
+
+```text
+Omni AI
+
+Business Event / User State / Business Data / User Request
+        ↓
+Messenger Business Logic
+        ↓
+AI execution decision
+        ↓
+Context-aware AI
+        ↓
+Popup / Push / Navigation / Voice / Suggestion
+```
+
+예를 들어,
+
+* 채팅방 진입
+  → 현재 대화 Context를 기반으로 대화 시작 문장 추천
+
+* OFFLINE → ONLINE 상태 변경
+  → 자리비움 동안 쌓인 메시지 중 확인이 필요한 내용 요약
+
+* 여러 대화방에서 특정 업무 조건 발생
+  → 중요 상황을 판단하고 사용자에게 선제적으로 안내
+
+* Label Matched
+  → AI 판단 후 Popup / Push / Navigation / Voice 등 적절한 방식으로 전달
+
+* `/요약`, `/질문`과 같은 사용자 직접 요청
+  → 동일한 AI 실행 구조를 통해 처리
+
+이 구조에서 AI는 독립적인 기능의 시작점이 아니다.
+
+**Messenger가 관리하는 Business Logic과 Business State를 중심으로 실행 필요성을 판단하고, AI는 필요한 Context를 해석하여 결과를 생성한다.**
+
+Omni AI의 목적은 AI 기능을 단순히 더 많이 추가하는 것이 아니라,
+
+> **User Request뿐 아니라 Messenger가 이미 알고 있는 Business Event, User State, Business Data를 하나의 AI 실행 구조로 연결하는 것**
+
+이다.
+
 
 ---
 
-## Architecture
+## Current Scope
+
+현재 Messenger Backend는 `WS service`가 인증, 파일, 실시간 채팅, 쪽지, 알림, 사용자 상태, REST API 등을 함께 처리하는 구조다.
+
+Omni AI Architecture의 우선 범위는 이 WS service를 즉시 분리하는 것이 아니라, 기존 WS service와 연동되는 `ai-orchestrator`와 `omni-ai-server`를 정의하고 구축하는 것이다.
+
+아래 Architecture Diagram은 현재 배포 구조가 아니라, WS service 책임을 점진적으로 분리했을 때의 **Target Architecture / Evolution Direction**이다.
+
+서비스 분리 방향은 [Service Boundary and Migration](docs/service-boundary-and-migration.md)에서 별도로 다룬다.
+
+---
+
+## Target Architecture / Evolution Direction
 
 ```mermaid
 flowchart TD
-    A1[Business Event<br/>Room Enter / Status Change / Label Matched] --> B[Java Messenger Backend]
-    A2[Client Request<br/>Selected Messages / Current View / Draft] --> B
-    B --> C[Business Logic / Policy<br/>Permission / State / Context Scope]
-    C --> D{AI 실행 필요?}
-    D -- No --> E[Skip]
-    D -- Yes --> F[AiTask]
-    F --> G[AI Task Queue]
-    G --> H[Omni AI Runtime]
+    A[Messenger Client] -->|WebSocket / REST| B[realtime-message-service]
+    A <-->|Client AI Request| G[ai-orchestrator]
+    A --> C[user-service]
+    A --> D[auth-service]
+    A --> E[file-service]
 
-    H --> I[Workflow Execution]
-    H --> J[Agent Execution]
+    B --> C[user-service]
+    B --> D[auth-service]
+    B --> E[file-service]
 
-    I --> K[Context / Tool Provider]
-    J --> K
+    C --> F[NATS JetStream<br/>Business Event / AI Trigger]
+    B --> F
+    F --> G
 
-    K --> L[Server Context / Server Tool]
-    K --> M[Client Integration]
+    G --> H{AI 실행 필요?}
+    H -- No --> I[Skip]
+    H -- Yes --> J[AiTask / executionId]
+    J --> K[omni-ai-server]
 
-    M --> N[Java Tool Gateway]
-    N --> O[Client Tool]
-    O --> N
-    N --> M
+    K -->|Server Tool Request| G
+    G --> L[Server Tool Relay<br/>inside ai-orchestrator]
+    L <--> B
+    L <--> C
+    L <--> D
+    L <--> E
 
-    I --> P[Structured Result]
-    J --> P
-    P --> Q[Action / Delivery]
+    K --> M[Workflow / Agent Execution]
+    K --> N[Client Tool Request]
+    N --> O[Client Tool Relay<br/>inside realtime-message-service]
+    O --> P[Client Tool]
+    P --> O
+    O --> K
+
+    K --> Q[Streaming / Structured Result]
+    Q --> R[Core NATS]
+    R --> B
+    B --> A
 ```
 
 ### Responsibility
 
+아래 책임표는 Target Architecture 기준이다. 현재는 일부 책임이 `WS service` 안에 함께 존재할 수 있다.
+
 | Layer | Responsibility |
 | --- | --- |
-| **Java Messenger Backend** | Business Event, User State, Permission, Business Policy, AiTask 생성 |
-| **AI Task Queue** | Messenger와 AI 실행 분리, workload buffering |
-| **Omni AI Runtime** | Workflow / Agent 실행, Context 구성, LLM / Tool Orchestration |
-| **Client Integration** | Client Context / Client Tool을 Omni AI에 연결하는 연동 계층 |
-| **Java Tool Gateway** | Client Tool 요청 전달, Session / Permission / Correlation |
-| **Client** | UI / Local Context 제공, Tool 실행 |
-| **Action / Delivery** | Suggestion, Popup, Push, Navigation, Voice |
+| **realtime-message-service** | WebSocket Connection, Chat / Note / Alert, History REST, Realtime Push, AI Streaming Result 전달 |
+| **user-service** | User Profile, Organization / Class, Rule / Cache, Presence, Friend Memo, Label / Address Book |
+| **auth-service** | Authentication, Token Policy, JWT / Cookie Policy, User / Tenant Authentication Context |
+| **file-service** | File Upload / Download, Metadata, Permission, Attachment |
+| **ai-orchestrator** | Cross-service AI coordination, Trigger Policy, Context Assembly, Conversation Metadata, Server Tool Relay, Result Routing |
+| **Server Tool Relay** | `ai-orchestrator` 내부 책임. Server-side tool/context 요청을 `auth-service`, `file-service`, `user-service`, `realtime-message-service`로 중계 |
+| **omni-ai-server** | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State |
+| **Client Tool Relay** | `realtime-message-service` 내부 책임. Client Tool 요청 전달, Session lookup, Response Correlation |
+| **NATS JetStream** | 재처리가 필요한 Business Event / AI Trigger 전달 |
+| **Core NATS** | LLM Streaming Result를 현재 Session Owner 기준으로 low-latency routing |
 
 ---
 
-## Core Design
+## Core Principles
 
 ### 1. Business Event와 AiTask를 분리
 
 ```text
-ROOM_ENTERED
+USER_RETURNED
 = 무슨 일이 발생했는가
 
-CONVERSATION_START
+URGENT_MESSAGE_SUMMARY
 = AI가 무엇을 수행해야 하는가
 ```
 
+Business Event가 발생했다고 해서 항상 AI Task가 생성되는 것은 아니다. Policy를 통과해 실행이 확정된 경우에만 `AiTask`를 만든다.
+
+### 2. Service Ownership 유지
+
+각 Service는 자신의 Business State와 Policy의 Source of Truth를 유지한다.
+
 ```text
-Business Event
-    ↓
-Business Policy
-    ↓
-AiTask
+realtime-message-service → WebSocket, Chat / Note / Alert, Realtime Delivery
+user-service             → User, Presence, Rule, Label
+auth-service             → Authentication, Token Policy
+file-service             → File, Attachment, Permission
 ```
 
-Business Event가 발생했다고 해서 항상 AI Task가 생성되는 것은 아니다.
+`ai-orchestrator`는 Domain State를 소유하지 않는다. 여러 Service의 상태를 조합해야 하는 AI Use Case만 조정한다.
+
+### 3. AI Runtime과 Messenger Application 분리
+
+```text
+ai-orchestrator
+→ Product-facing Metadata, Policy, Execution Correlation, Result Routing
+
+omni-ai-server
+→ Prompt, Workflow, LangGraph, LLM Execution, Conversation History, Agent State
+```
+
+`omni-ai-server`가 Messenger topology, WebSocket routing, Authentication, Product Metadata를 직접 소유하지 않도록 한다.
 
 ---
 
-### 2. AI 실행 판단은 Java Backend에서
+## AI Function Models
 
-```text
-Business Event / Client Request
-        ↓
-Feature Service / Handler
-        ↓
-Feature / Permission / Cooldown / Context Policy
-        ↓
-SKIP or EXECUTE
-```
-
-AI 실행이 확정된 경우에만 `AiTask`를 생성한다.
+| Model | Trigger | Main Flow | Result |
+| --- | --- | --- | --- |
+| Server-driven AI | Server Business Event | `user-service / realtime-message-service → NATS JetStream → ai-orchestrator → omni-ai-server` | Realtime Push |
+| Client-driven Command | `/요약`, `/일정`, `/번역` | `Client → ai-orchestrator → omni-ai-server` 또는 `Client → realtime-message-service → ai-orchestrator → omni-ai-server` | Streaming |
+| Stateful Chatbot | `conversationId + message` | `Client → ai-orchestrator → omni-ai-server` 또는 WebSocket 경유 | Streaming / Multi-turn |
 
 ---
 
-### 3. 실행 확정 Task만 Queue에 전달
+## Conversation Ownership
+
+Conversation은 Product Metadata와 AI Runtime History를 분리한다.
 
 ```text
-Business Logic
-    ↓
-Business Policy
-    ↓
-AiTask
-    ↓
-AI Task Queue
-    ↓
-Omni AI
+Conversation List
+Client → ai-orchestrator → Conversation Metadata Store → Client
+
+Conversation Detail History
+Client → ai-orchestrator access check → omni-ai-server → History Store → ai-orchestrator → Client
 ```
 
-Queue는 모든 Business Event를 전달하는 Event Bus가 아니라, **AI 실행이 확정된 작업을 비동기로 전달하는 실행 경계**로 사용한다.
-
-초기에는 Queue 하나로 시작하고, 실제 부하 특성이 확인되면 다음과 같이 workload 기준으로 분리한다.
-
-```text
-REALTIME / NORMAL / BACKGROUND / HEAVY
-```
+`omni-ai-server`가 title 같은 metadata 후보를 생성할 수는 있지만, 최종 저장 owner는 `ai-orchestrator`다.
 
 ---
 
-## AI Execution Modes
+## Tool Relay Boundary
 
-Omni AI Runtime은 Task의 특성에 따라 두 가지 실행 방식을 사용한다.
-
-### Workflow Execution
-
-필요한 Context와 처리 순서가 비교적 명확한 기능.
+Server Tool과 Client Tool의 relay 책임을 분리한다.
 
 ```text
-AiTask
-→ Context Resolution
-→ Workflow
-→ AI Processing
-→ Result
-```
+Server Tool
+omni-ai-server
+→ Server Tool이 필요하다고 판단
+→ ai-orchestrator Server Tool Relay
+→ target service
+→ ai-orchestrator
+→ omni-ai-server
 
-대표 예:
-
-- Conversation Start Recommendation
-- Urgent Message Summary
-- Label 기반 분류 / 요약
-
-Workflow Execution에서도 필요한 Context가 Client에만 존재한다면 Client Integration을 사용할 수 있다.
-
----
-
-### Agent Execution
-
-실행 도중 다음 단계나 Tool 사용 여부를 AI가 동적으로 결정하는 기능.
-
-```text
-AiTask
-→ Agent Runtime
-→ Tool Decision
-→ Tool Call
-→ Tool Result
-→ Agent Resume
-→ Final Result
-```
-
-대표 예:
-
-- 현재 UI 상태를 확인한 뒤 추가 Client Tool 호출
-- 선택된 메시지를 조회한 뒤 다음 Tool 결정
-- 여러 Server / Client Tool을 순차 호출한 뒤 최종 응답 생성
-
-Agent Execution의 핵심은 **Client를 사용한다는 점이 아니라, Runtime 중 Tool 사용 여부와 다음 단계를 동적으로 결정한다는 점**이다.
-
----
-
-## Client Integration
-
-Client Integration은 별도의 AI 실행 방식이 아니다.
-
-**Workflow Execution 또는 Agent Execution이 사용할 수 있는 Context / Tool Provider**이다.
-
-Server에서 직접 접근할 수 없는 UI / Local Context 또는 Client Tool이 필요한 경우 Java Messenger Server를 Gateway로 사용한다.
-
-```text
-Omni AI Runtime
-   ↓ Client Context / Tool 필요
-Java Tool Gateway
-   ↓ WebSocket
 Client Tool
-   ↓
-Java Tool Gateway
-   ↓
-Omni AI Runtime
-```
-
-Java Messenger Server는 기존에 관리하던 책임을 유지한다.
-
-- Authentication
-- User Session
-- WebSocket Connection
-- Permission
-- Device State
-
-Client Tool은 전체 데이터를 전달하지 않고 **AI Task에 필요한 최소 범위만 제공**한다.
-
-예:
-
-```text
-getSelectedMessages()
-getCurrentView()
-getRecentLocalMessages(limit)
-getCurrentDraft()
-```
-
-지양:
-
-```text
-getAllClientData()
-getAllChatHistory()
-```
-
-Context 처리 역할은 다음처럼 구분한다.
-
-```text
-Client
-→ Scope Reduction
-
-Java Server
-→ Business Filtering
-
-Omni AI
-→ Semantic Filtering / Ranking / Summary
-```
-
----
-
-## Workflow와 Client Integration 관계
-
-Client Integration은 Workflow / Agent와 같은 축의 개념이 아니다.
-
-```text
-Execution Mode
-├─ Workflow Execution
-└─ Agent Execution
-
-Context / Tool Provider
-├─ Server Context / Server Tool
-└─ Client Integration
-```
-
-예를 들어:
-
-```text
-Workflow Execution
-→ Client Context 필요
-→ Java Tool Gateway
+omni-ai-server
+→ Client Tool이 필요하다고 판단
+→ realtime-message-service Client Tool Relay
 → Client Tool
-→ Context 확보
-→ Workflow 계속 실행
+→ realtime-message-service
+→ omni-ai-server
 ```
 
-또는:
-
-```text
-Agent Execution
-→ Tool Decision
-→ Client Tool 선택
-→ Java Tool Gateway
-→ Client Tool
-→ Tool Result
-→ Agent Resume
-```
-
-처럼 같은 Client Integration을 서로 다른 Execution Mode에서 사용할 수 있다.
+`ai-orchestrator`는 Client Tool data path가 되지 않는다. Client Tool lifecycle event는 필요 시 `ai-orchestrator`에 보고할 수 있다.
 
 ---
 
 ## Communication
 
-통신 방식은 하나로 통일하지 않고 역할에 따라 구분한다.
-
 ```text
-AI Task Dispatch
-= Queue
+Business Event / AI Trigger
+= NATS JetStream
 
-Omni AI ↔ Java Tool Gateway
-= gRPC / Internal RPC
+Execution Control
+= Client / realtime-message-service → ai-orchestrator → omni-ai-server
 
-Java ↔ Client
-= WebSocket
+LLM Streaming
+= omni-ai-server → Core NATS → realtime-message-service → Client
+
+Client Tool Call
+= omni-ai-server ↔ realtime-message-service Client Tool Relay
 ```
 
-통일하는 대상은 Transport가 아니라 **AiTask / Execution / Tool Call의 실행 계약**이다.
-
-Agent Execution에서 여러 Tool Call이 필요한 경우 다음 식별자를 기준으로 요청과 응답을 연결한다.
+공통 correlation 후보:
 
 ```text
+triggerId
 taskId
 executionId
+conversationId
 toolCallId
 ```
 
 ---
 
-## Representative Use Cases
-
-| Use Case | Trigger | AI Task | Execution | Delivery |
-| --- | --- | --- | --- | --- |
-| **Conversation Start** | Room Enter | `CONVERSATION_START` | Workflow | Client Suggestion |
-| **Urgent Message Summary** | OFFLINE → ONLINE | `URGENT_MESSAGE_SUMMARY` | Workflow | Popup / Navigation |
-| **Label Multimodal Action** | Label Matched | `LABEL_MULTIMODAL_ACTION` | Workflow | Popup / Push / Voice |
-| **Client Context 기반 AI 요청** | Client Request | Task별 정의 | Workflow 또는 Agent | Result / Action |
-
----
-
-## Project Status
-
-| Area | Status |
-| --- | --- |
-| Overall Architecture | **Designed** |
-| Server-driven AI Flow | **Designed** |
-| AiTask / Queue Model | **Designed** |
-| Client Integration | **Designed** |
-| Agent Runtime / Runtime Tool Calling | **Planned** |
-| Workload Queue Separation | **Planned** |
-| Context Store / Cache / Observability | **Planned** |
-
----
-
 ## Documentation
 
-```text
-docs/
-├─ architecture.md
-├─ server-driven-ai.md
-├─ ai-task-and-queue.md
-├─ client-integration.md
-├─ design-decisions.md
-├─ roadmap.md
-├─ decisions/
-│  └─ README.md
-└─ notes/
-   ├─ README.md
-   ├─ phase-1-server-driven.md
-   └─ troubleshooting.md
-```
-
-| Document | Role | When to update |
-| --- | --- | --- |
-| [Architecture](docs/architecture.md) | 전체 구조, Layer 책임, 실행 축을 설명하는 기준 문서 | 책임 경계, 실행 흐름, Runtime 구조가 바뀔 때 |
-| [Server-driven AI](docs/server-driven-ai.md) | Business Event / Client Request가 AiTask로 전환되는 흐름 설명 | Trigger, Handler, Policy 조합 방식이 바뀔 때 |
-| [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask 모델과 Queue 실행 경계 설명 | Task schema, queue, retry, workload 정책이 바뀔 때 |
-| [Client Integration](docs/client-integration.md) | Client Context / Client Tool을 Provider로 연결하는 방식 설명 | Client Tool, Gateway, correlation, timeout 구조가 바뀔 때 |
-| [Design Decisions](docs/design-decisions.md) | 주요 설계 결정의 요약 인덱스 | 핵심 설계 판단이 추가되거나 방향이 바뀔 때 |
-| [Roadmap](docs/roadmap.md) | 구현 순서와 진행 상태 관리 | Phase 상태나 개발 순서가 바뀔 때 |
-| [Decisions](docs/decisions/README.md) | 개별 ADR을 모으는 디렉터리 | 되돌리기 어려운 기술 / 설계 결정을 기록할 때 |
-| [Notes](docs/notes/README.md) | 개발 중 메모, 트러블슈팅, Phase별 회고를 모으는 디렉터리 | 구현 중 문제, 해결, 회고, 실험 결과가 생길 때 |
+| Document | Role |
+| --- | --- |
+| [Architecture](docs/architecture.md) | 전체 구조, Layer 책임, 실행 축 |
+| [Service Boundary and Migration](docs/service-boundary-and-migration.md) | 현재 WS service 현실과 target service split / migration 방향 |
+| [Server-driven AI](docs/server-driven-ai.md) | Business Event / Client Request가 AiTask로 전환되는 흐름 |
+| [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask, Trigger, Result Routing, Stream Event |
+| [Client Integration](docs/client-integration.md) | Client Tool Relay와 Client Context |
+| [Design Decisions](docs/design-decisions.md) | 주요 설계 결정 요약 |
+| [Roadmap](docs/roadmap.md) | Phase와 구현 순서 |
 
 ---
 
@@ -375,32 +288,28 @@ docs/
 
 ```text
 Phase 1
-Server-driven 기본 구조
-→ Conversation Start E2E
+Current WS service 연동과 Omni AI 기본 구조
 
 Phase 2
-두 번째 Use Case
-→ 공통 구조 재사용 검증
+Cross-domain Trigger / Result Routing
 
 Phase 3
-Client Integration
-→ Client Tool Registry / Java Tool Gateway
+Server Tool Relay / Client Tool Relay
 
 Phase 4
-Agent Runtime
-→ Runtime Tool Calling / Correlation / Timeout
+Stateful Chatbot / Agent Runtime
 
 Phase 5
-Context Store / Cache / Observability
-→ workload 최적화
+AI Context Projection / Cache / Observability
+
+Future
+WS service responsibility split
 ```
 
 ---
 
 ## Summary
 
-Omni AI Platform은 **Messenger의 Business Event와 Client Request를 AI 실행 후보의 진입점으로 삼고, User State와 Business Data를 실행 판단과 Context 구성에 활용하는 공통 AI 실행 구조**를 목표로 한다.
+현재 1차 범위는 `WS service`와 연동되는 `ai-orchestrator`, `omni-ai-server` 구축이다.
 
-Java Messenger Backend는 Business Policy를 통해 AI 실행 여부를 판단하고 `AiTask`를 생성하며, Omni AI는 Task 특성에 따라 Workflow 또는 Agent 방식으로 실행한다.
-
-Client Integration은 별도의 실행 방식이 아니라, Workflow 또는 Agent가 Server에서 직접 확보할 수 없는 Client Context와 Tool을 사용할 수 있도록 연결하는 공통 Provider 계층이다.
+Target Architecture에서는 `WS service`의 책임을 `realtime-message-service`, `user-service`, `auth-service`, `file-service`로 점진 분리한다. 여러 Service의 상태를 조합해야 하는 AI Use Case는 `ai-orchestrator`가 실행을 조정하고, `omni-ai-server`는 Workflow, LLM Execution, Conversation History와 Agent State를 관리한다.

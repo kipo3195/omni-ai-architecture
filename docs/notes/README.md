@@ -1,6 +1,6 @@
 # Development Notes
 
-> Role: 개발 중 발생한 구현 메모, 트러블슈팅, 실험 결과, Phase별 회고를 모으는 디렉터리  
+> Role: 개발 중 발생한 구현 메모, 트러블슈팅, 실험 결과, Phase별 회고를 모으는 디렉터리
 > Status: Planned
 
 ---
@@ -16,7 +16,7 @@
 ## What Goes Here
 
 - 구현 중 마주친 문제와 해결 과정
-- Queue, WebSocket, Tool Calling, Context 처리 관련 트러블슈팅
+- NATS Trigger, Result Routing, WebSocket, Tool Calling, Context 처리 관련 트러블슈팅
 - Phase별 작업 메모와 회고
 - 실험 결과
 - 추후 ADR로 승격할 수 있는 임시 판단
@@ -38,4 +38,3 @@
 | --- | --- |
 | [Phase 1 Server-driven](phase-1-server-driven.md) | Phase 1 구현 중 메모와 회고 |
 | [Troubleshooting](troubleshooting.md) | 구현 중 문제와 해결 기록 |
-

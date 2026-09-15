@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-> Role: 되돌리기 어렵거나 이후 구현 방향에 영향을 주는 개별 설계 결정을 기록하는 디렉터리  
+> Role: 되돌리기 어렵거나 이후 구현 방향에 영향을 주는 개별 설계 결정을 기록하는 디렉터리
 > Status: Planned
 
 ---
@@ -18,9 +18,22 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 다음과 같은 결정은 별도 ADR로 남긴다.
 
 - Queue 기술 또는 운영 방식 선택
+- Current WS service split / migration 순서
+- ai-orchestrator boundary와 HA 전략
+- NATS JetStream / Core NATS 사용 범위
 - AiTask schema의 큰 변경
+- Conversation Metadata Store 선택
+- AI History Store 선택
+- Trigger expiration / dedup 정책 변경
+- Session Registry와 Result Routing 방식 선택
+- Stream reconnect / resume 정책
+- Chatbot history retention 정책
+- Server Tool Relay 통신 방식과 권한 경계
+- Label / Address Book 분리 여부
+- unread count 계산 주체
+- file-service의 AI Context 연계 범위
 - Context Store 도입 여부
-- Java Tool Gateway 통신 방식 선택
+- Client Tool Relay 통신 방식 선택
 - Agent Runtime lifecycle 변경
 - retry / timeout / duplicate 방지 정책 변경
 - 비용이나 latency에 큰 영향을 주는 구조 변경
@@ -34,7 +47,7 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 ```text
 001-ai-task-model.md
 002-queue-selection.md
-003-client-tool-gateway.md
+003-client-tool-relay.md
 ```
 
 번호는 작성 순서를 나타낸다. 제목은 결정의 주제를 짧게 표현한다.
@@ -74,4 +87,3 @@ Status: Proposed | Accepted | Superseded
 ## Index
 
 아직 작성된 ADR은 없다.
-
