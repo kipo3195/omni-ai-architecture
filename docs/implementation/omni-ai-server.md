@@ -1,12 +1,12 @@
 # Omni AI Server Implementation
 
-Status: Implemented
+Status: Planned
 
 ---
 
 ## Scope
 
-Omni AI Server는 Python 기반 AI Runtime으로 구현하였다.
+Omni AI Server는 Python 기반 AI Runtime으로 구현할 계획이다.
 
 주요 책임:
 

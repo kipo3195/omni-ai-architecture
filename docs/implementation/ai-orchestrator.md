@@ -1,12 +1,12 @@
 # AI Orchestrator Implementation
 
-Status: Implemented
+Status: Planned
 
 ---
 
 ## Scope
 
-AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현하였다.
+AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현할 계획이다.
 
 주요 책임:
 
@@ -49,7 +49,7 @@ AiExecutionUseCase
 | EventConsumer | Business Event / AI Trigger 수신 |
 | AiExecutionUseCase | AI 실행 판단과 실행 흐름 조정 |
 | TriggerPolicy | feature, permission, cooldown, dedup 판단 |
-| ContextAssembler | 실행에 필요한 domain context 조회 및 조합 |
+| ContextAssembler | 각 Domain Service가 소유한 데이터를 조회하고, AI 실행에 필요한 Context 형태로 조합 |
 | AiTaskFactory | Omni AI Server에 전달할 AiTask 생성 |
 | ExecutionCorrelationStore | triggerId, taskId, executionId 기준 실행 상관관계 저장 |
 | OmniAiClient | Omni AI Server 호출, timeout, error mapping |

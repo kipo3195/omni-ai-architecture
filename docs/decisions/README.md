@@ -89,4 +89,4 @@ Status: Proposed | Accepted | Superseded
 
 - [001. Session Registry Based AI Result Routing](001-session-registry-result-routing.md)
 - [002. Tool Runtime Ownership and Client Tool Dispatch](002-tool-runtime-ownership-client-tool-dispatch.md)
-- [003. Spring Boot Runtime for AI Orchestrator](003-spring-boot-runtime.md)
+- [003. AI Orchestrator as a Spring Boot Application Service](003-ai-orchestrator-spring-boot-service.md)

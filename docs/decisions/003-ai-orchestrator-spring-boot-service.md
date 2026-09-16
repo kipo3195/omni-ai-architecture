@@ -1,4 +1,4 @@
-# 003. Spring Boot Runtime for AI Orchestrator
+# 003. AI Orchestrator as a Spring Boot Application Service
 
 Status: Accepted
 
@@ -18,7 +18,9 @@ AI 실행 판단, Trigger Policy, Context Assembly, AiTask 생성, Execution Cor
 
 ## Decision
 
-AI Orchestrator를 Spring Boot 기반 신규 Application Service로 구현한다.
+독립적인 AI Orchestrator Application Service를 둔다.
+
+AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현한다.
 
 WebSocket Service와 TCP Realtime Service는 각자의 connection, session, delivery 책임을 유지한다.
 

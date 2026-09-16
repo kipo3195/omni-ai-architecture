@@ -1,13 +1,13 @@
 # Implementation
 
 > Role: 설계 문서에서 정의한 책임 경계를 실제 runtime과 application structure로 연결한다.
-> Status: Implemented
+> Status: Planned
 
 ---
 
 ## Purpose
 
-이 디렉터리는 Omni AI Platform의 구현 관점을 정리한다.
+이 디렉터리는 Omni AI Platform의 구현 예정 구조와 구현 관점을 정리한다.
 
 상위 Architecture 문서는 책임 경계와 실행 흐름을 설명하고, 이 디렉터리는 각 runtime이 어떤 application structure로 구현되었는지 기록한다.
 
@@ -17,8 +17,8 @@
 
 | Document | Role | Status |
 | --- | --- | --- |
-| [AI Orchestrator](ai-orchestrator.md) | Spring Boot 기반 AI Orchestrator 내부 구조 | Implemented |
-| [Omni AI Server](omni-ai-server.md) | Python 기반 AI Runtime 역할과 책임 | Implemented |
+| [AI Orchestrator](ai-orchestrator.md) | Spring Boot 기반 AI Orchestrator 내부 구조 | Planned |
+| [Omni AI Server](omni-ai-server.md) | Python 기반 AI Runtime 역할과 책임 | Planned |
 
 ---
 

@@ -43,7 +43,7 @@ Trade-off
 → 별도 Orchestrator hop이 추가된다. 대신 channel-specific connection / delivery 책임과 AI execution policy를 분리하고, WebSocket Client와 TCP Client가 동일한 AI 규격을 사용할 수 있다.
 
 Related
-→ [ADR 003. Spring Boot Runtime for AI Orchestrator](decisions/003-spring-boot-runtime.md)
+→ [ADR 003. AI Orchestrator as a Spring Boot Application Service](decisions/003-ai-orchestrator-spring-boot-service.md)
 
 Status: Accepted
 

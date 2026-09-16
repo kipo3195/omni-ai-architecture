@@ -85,7 +85,7 @@ Omni AI Architecture의 우선 범위는 WebSocket Service를 즉시 분리하�
 
 아래 Architecture Diagram은 현재 배포 구조가 아니라, WebSocket Service 책임을 점진적으로 분리했을 때의 **Target Architecture / Evolution Direction**이다.
 
-TCP Realtime Service는 대표 다이어그램을 복잡하게 만들지 않기 위해 생략하며, 동일한 AI 실행 규격을 사용하는 channel 확장 경로로 [ADR 003](docs/decisions/003-spring-boot-runtime.md)과 [Implementation](docs/implementation/README.md)에서 다룬다.
+TCP Realtime Service는 대표 다이어그램을 복잡하게 만들지 않기 위해 생략하며, 동일한 AI 실행 규격을 사용하는 channel 확장 경로로 [ADR 003](docs/decisions/003-ai-orchestrator-spring-boot-service.md)과 [Implementation](docs/implementation/README.md)에서 다룬다.
 
 서비스 분리 방향은 [Service Boundary and Migration](docs/service-boundary-and-migration.md)에서 별도로 다룬다.
 
@@ -316,7 +316,7 @@ idempotencyKey
 | [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask, Trigger, Result Routing, Stream Event |
 | [Client Integration](docs/client-integration.md) | Client Tool Delivery와 Client Context |
 | [Design Decisions](docs/design-decisions.md) | 주요 설계 결정 요약 |
-| [Implementation](docs/implementation/README.md) | 구현 구조와 runtime별 책임 |
+| [Implementation](docs/implementation/README.md) | 구현 예정 구조와 runtime별 책임 |
 | [Roadmap](docs/roadmap.md) | Phase와 구현 순서 |
 
 ---
