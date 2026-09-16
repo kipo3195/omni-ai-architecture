@@ -2,7 +2,7 @@
 
 > Role: AiTask 모델, Trigger 전달, 실행 경계, Result Routing을 설명하는 문서
 > Status: Designed
-> 이 문서는 AiTask, NATS JetStream Trigger, omni-ai-server 실행 경계, Core NATS Result Routing을 설명한다. Queue 운영 구현 완료를 의미하지 않는다.
+> 이 문서는 AiTask, NATS JetStream Trigger, Omni AI Server 실행 경계, Core NATS Result Routing을 설명한다. Queue 운영 구현 완료를 의미하지 않는다.
 
 ---
 
@@ -71,7 +71,7 @@ AiTask
   - raw file content
 ```
 
-대용량 Context는 AiTask payload에 직접 싣지 않고 Context Store, Service API / gRPC, 또는 명시적으로 계약된 Projection에서 조회하는 방향으로 둔다. Domain Service가 소유한 DB / Redis를 `ai-orchestrator`가 직접 읽는 방식은 기본 전략으로 두지 않는다.
+대용량 Context는 AiTask payload에 직접 싣지 않고 Context Store, Service API / gRPC, 또는 명시적으로 계약된 Projection에서 조회하는 방향으로 둔다. Domain Service가 소유한 DB / Redis를 `AI Orchestrator`가 직접 읽는 방식은 기본 전략으로 두지 않는다.
 
 Status: Designed
 
@@ -116,7 +116,7 @@ Status: Designed
 
 ## 5. Trigger-to-Task Condition
 
-omni-ai-server에는 실행이 확정된 Task만 전달한다.
+Omni AI Server에는 실행이 확정된 Task만 전달한다.
 
 ```text
 Server-triggered path                  Client-explicit path
@@ -124,13 +124,13 @@ Business Event                         Client Request
         ↓                                      ↓
 NATS JetStream (필요 시)                Permission / Context Scope / Policy
         ↓                                      ↓
-ai-orchestrator 또는 Service Handler    Service Handler / ai-orchestrator
+AI Orchestrator 또는 Service Handler    Service Handler / AI Orchestrator
         ↓                                      ↓
 SKIP / EXECUTE                         SKIP / EXECUTE
         ↓                                      ↓
         └──── EXECUTE인 경우에만 AiTask 생성 ──┘
         ↓
-omni-ai-server
+Omni AI Server
 ```
 
 NATS JetStream은 모든 AI 실행이 확정된 Task만 받는 실행 큐가 아니다. 재처리와 ACK가 필요한 Business Event / AI Trigger를 전달하는 경계이다.
@@ -154,9 +154,9 @@ Status: Designed
 
 ---
 
-## 7. omni-ai-server Execution Boundary
+## 7. Omni AI Server Execution Boundary
 
-`omni-ai-server`는 실행이 확정된 AiTask를 처리한다.
+`Omni AI Server`는 실행이 확정된 AiTask를 처리한다.
 
 ```text
 AiTask
@@ -174,7 +174,7 @@ Validation
 Structured Result
 ```
 
-Business Rule과 Trigger Policy 판단은 omni-ai-server 호출 이전에 끝나야 한다.
+Business Rule과 Trigger Policy 판단은 Omni AI Server 호출 이전에 끝나야 한다.
 
 Status: Designed
 
@@ -182,7 +182,7 @@ Status: Designed
 
 ## 8. Conversation State Boundary
 
-`ai-orchestrator`는 Product Application을 위한 Conversation Metadata를 관리한다.
+`AI Orchestrator`는 Product Application을 위한 Conversation Metadata를 관리한다.
 
 ```text
 conversationId
@@ -197,7 +197,7 @@ archived
 access policy
 ```
 
-`omni-ai-server`는 다음 LLM 호출을 위한 Runtime State를 관리한다.
+`Omni AI Server`는 다음 LLM 호출을 위한 Runtime State를 관리한다.
 
 ```text
 User Turn
@@ -210,7 +210,7 @@ Agent State
 Prompt Context
 ```
 
-`realtime-message-service`의 WebSocket Session과 `conversationId`는 다른 lifecycle을 가진다.
+`WebSocket Service`의 WebSocket Session과 `conversationId`는 다른 lifecycle을 가진다.
 
 Status: Designed
 
@@ -220,7 +220,7 @@ Status: Designed
 
 AI 기능은 Trigger를 처리한 instance와 실제 WebSocket이 붙어 있는 instance가 다를 수 있다는 전제를 가진다.
 
-`realtime-message-service`는 WebSocket 연결 시 Connection Registry에 현재 연결 owner를 등록한다.
+`WebSocket Service`는 WebSocket 연결 시 Connection Registry에 현재 연결 owner를 등록한다.
 
 Registry 후보 key / value:
 
@@ -264,7 +264,7 @@ Status: Designed
 ```text
 Client WebSocket Connect
   ↓
-realtime-message-service
+WebSocket Service
   ↓
 Connection Registry 등록
   - connectionId
@@ -274,7 +274,7 @@ Connection Registry 등록
 
 Client enterRoom
   ↓
-realtime-message-service
+WebSocket Service
   ↓
 roomSessionId 생성
   ↓
@@ -289,9 +289,9 @@ AiTask 생성
   - connectionId 또는 roomSessionId
   - routingRef
   ↓
-ai-orchestrator
+AI Orchestrator
   ↓
-omni-ai-server
+Omni AI Server
 ```
 
 `enterRoom` 외에도 선택 메시지 요약, 현재 화면 기반 질문, Draft 보조, Client Local Context가 필요한 요청은 동일한 원칙을 따른다.
@@ -299,13 +299,13 @@ omni-ai-server
 ```text
 Client Explicit Request
   ↓
-realtime-message-service
+WebSocket Service
   ↓
 Authentication / Session / Permission
   ↓
 connectionId / roomSessionId correlation
   ↓
-ai-orchestrator
+AI Orchestrator
   ↓
 AiTask / executionId
 ```
@@ -329,20 +329,20 @@ SCHEDULE_TRIGGERED
 MESSAGE_CREATED
 ```
 
-Server Trigger는 특정 WebSocket connection에서 시작되지 않을 수 있다. 이 경우 Trigger에는 user / tenant / room / business context를 담고, `ai-orchestrator` 또는 Service-local Handler가 Result 전달 전에 현재 target connection을 resolve한다.
+Server Trigger는 특정 WebSocket connection에서 시작되지 않을 수 있다. 이 경우 Trigger에는 user / tenant / room / business context를 담고, `AI Orchestrator` 또는 Service-local Handler가 Result 전달 전에 현재 target connection을 resolve한다.
 
 ```text
 Business Event
   ↓
 NATS JetStream (필요 시)
   ↓
-ai-orchestrator
+AI Orchestrator
   ↓
 Policy / Context Assembly
   ↓
 AiTask
   ↓
-omni-ai-server
+Omni AI Server
   ↓
 Result Push
   ↓
@@ -376,16 +376,16 @@ Trigger 당시 Instance가 최종 Delivery 대상이라고 가정하지 않는�
 
 ```text
 Trigger 시점
-userA → realtime-message-service #1
+userA → WebSocket Service #1
 
 AI 처리 중 reconnect
-userA → realtime-message-service #6
+userA → WebSocket Service #6
 
 Result Routing
-ai-orchestrator
+AI Orchestrator
 → Session Registry에서 현재 ownerInstanceId 확인
 → Core NATS
-→ realtime-message-service #6
+→ WebSocket Service #6
 → WebSocket Push
 ```
 
@@ -401,11 +401,11 @@ ai.stream.realtime.{ownerInstanceId}
 Result Routing 단계:
 
 ```text
-1. omni-ai-server가 executionId 기준으로 stream / result 생성
-2. ai-orchestrator 또는 Result Router가 triggerId / taskId / executionId로 실행 상태 확인
+1. Omni AI Server가 executionId 기준으로 stream / result 생성
+2. AI Orchestrator 또는 Result Router가 triggerId / taskId / executionId로 실행 상태 확인
 3. routingRef, connectionId, roomSessionId, userId / roomId로 Session Registry 조회
 4. 현재 ownerInstanceId 확인
-5. 해당 ownerInstanceId의 realtime-message-service instance subject로 Core NATS publish
+5. 해당 ownerInstanceId의 WebSocket Service instance subject로 Core NATS publish
 6. 해당 instance가 local WebSocket session으로 최종 전송
 ```
 
@@ -417,14 +417,14 @@ Status: Designed
 
 ## 13. Stream Event
 
-LLM Stream을 `ai-orchestrator`가 token-by-token proxy하지 않는 방향을 우선한다.
+LLM Stream을 `AI Orchestrator`가 token-by-token proxy하지 않는 방향을 우선한다.
 
 ```text
-omni-ai-server
+Omni AI Server
   ↓
 Core NATS
   ↓
-realtime-message-service
+WebSocket Service
   ↓
 Client
 ```
@@ -472,7 +472,7 @@ Status: Designed
 
 ## 14. Workload Split
 
-초기에는 Orchestrator consumer와 omni-ai-server 실행 자원을 단순하게 시작한다.
+초기에는 Orchestrator consumer와 Omni AI Server 실행 자원을 단순하게 시작한다.
 
 향후 실제 부하 특성이 확인되면 workload 기준으로 분리할 수 있다.
 

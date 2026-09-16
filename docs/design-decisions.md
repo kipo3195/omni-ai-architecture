@@ -6,18 +6,18 @@
 
 ---
 
-## WS 책임 분리는 Target Architecture로 둔다
+## WebSocket Service 책임 분리는 Target Architecture로 둔다
 
 결정
-→ Omni AI 1차 구축에서는 현재 `WS service`와 연동하고, Target Architecture에서는 `realtime-message-service`, `user-service`, `auth-service`, `file-service`로 책임을 점진 분리한다.
+→ Omni AI 1차 구축에서는 현재 `WebSocket Service`와 연동하고, Target Architecture에서는 `WebSocket Service`, `user-service`, `auth-service`, `file-service`로 책임을 점진 분리한다.
 
 배경
-→ 현재 WS service는 WebSocket, Chat, Note, Alert, User State, User Info, Auth, File, REST API 책임을 하나의 프로세스에 가진다.
+→ 현재 WebSocket Service는 WebSocket, Chat, Note, Alert, User State, User Info, Auth, File, REST API 책임을 하나의 프로세스에 가진다.
 
 이유
-→ AI Trigger, Context Assembly, LLM Streaming, Result Routing까지 WS service에 직접 추가하면 서비스 응집도가 더 낮아지고 변경 영향 범위가 커진다.
+→ AI Trigger, Context Assembly, LLM Streaming, Result Routing까지 WebSocket Service에 직접 추가하면 서비스 응집도가 더 낮아지고 변경 영향 범위가 커진다.
 
-→ 따라서 우선 `ai-orchestrator`와 `omni-ai-server`를 분리된 AI boundary로 만들고, WS service split은 별도 migration topic으로 관리한다.
+→ 따라서 우선 `AI Orchestrator`와 `Omni AI Server`를 분리된 AI boundary로 만들고, WebSocket Service split은 별도 migration topic으로 관리한다.
 
 Trade-off
 → 서비스 간 계약, 데이터 ownership, migration 순서를 별도로 관리해야 한다.
@@ -26,12 +26,35 @@ Status: Designed
 
 ---
 
+## AI Orchestrator는 별도 Spring Boot Runtime으로 둔다
+
+결정
+→ AI Orchestrator를 WebSocket Service나 Omni AI Server 내부에 분산시키지 않고, Spring Boot 기반 신규 Application Service로 구현한다.
+
+배경
+→ Messenger에는 WebSocket 기반 Client뿐 아니라 TCP 연결 기반의 TCP Realtime Service도 존재한다. 두 Client 경로 모두 동일한 AI 기능, 동일한 요청 / 응답 규격, 동일한 실행 정책을 제공해야 한다.
+
+이유
+→ AI 실행 판단, Trigger Policy, Context Assembly, AiTask 생성, Execution Correlation을 각 realtime service에 분산하면 WebSocket 경로와 TCP 경로의 구현이 달라지고 정책 불일치가 발생할 수 있다.
+
+→ 반대로 이 책임을 Omni AI Server로 넘기면 Python AI Runtime이 Messenger connection topology, channel별 session, product policy까지 알게 되어 AI Runtime과 Product Application 경계가 흐려진다.
+
+Trade-off
+→ 별도 Orchestrator hop이 추가된다. 대신 channel-specific connection / delivery 책임과 AI execution policy를 분리하고, WebSocket Client와 TCP Client가 동일한 AI 규격을 사용할 수 있다.
+
+Related
+→ [ADR 003. Spring Boot Runtime for AI Orchestrator](decisions/003-spring-boot-runtime.md)
+
+Status: Accepted
+
+---
+
 ## Business State는 각 Service가 소유한다
 
 결정
-→ `realtime-message-service`는 realtime delivery와 message state를, `user-service`는 user / presence를, `auth-service`는 authentication을, `file-service`는 file / attachment를 소유한다.
+→ `WebSocket Service`는 realtime delivery와 message state를, `user-service`는 user / presence를, `auth-service`는 authentication을, `file-service`는 file / attachment를 소유한다.
 
-→ 현재 구현에서는 이 책임들이 `WS service` 내부에 남아 있을 수 있으며, 위 구분은 Target Service Boundary 기준이다.
+→ 현재 구현에서는 이 책임들이 `WebSocket Service` 내부에 남아 있을 수 있으며, 위 구분은 Target Service Boundary 기준이다.
 
 배경
 → AI Use Case가 늘어나도 Domain State의 ownership을 중앙 AI 서버나 Orchestrator로 옮기면 안 된다.
@@ -40,25 +63,25 @@ Status: Designed
 → State ownership이 흐려지면 권한, 상태 변경, 정책 판단이 중복되고 Cross-service dependency가 빠르게 증가한다.
 
 Trade-off
-→ `ai-orchestrator`는 각 Domain Service가 소유한 상태를 직접 DB / Redis로 조회하지 않고, 해당 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 확인해야 한다. 단, cooldown, deduplication, execution correlation처럼 `ai-orchestrator`가 소유한 실행 조정 상태는 자체 DB / Redis에 저장하고 직접 조회할 수 있다.
+→ `AI Orchestrator`는 각 Domain Service가 소유한 상태를 직접 DB / Redis로 조회하지 않고, 해당 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 확인해야 한다. 단, cooldown, deduplication, execution correlation처럼 `AI Orchestrator`가 소유한 실행 조정 상태는 자체 DB / Redis에 저장하고 직접 조회할 수 있다.
 
 Status: Designed
 
 ---
 
-## Cross-service AI Use Case는 ai-orchestrator가 조정한다
+## Cross-service AI Use Case는 AI Orchestrator가 조정한다
 
 결정
-→ 여러 Service의 상태를 조합해야 하는 AI Use Case는 `ai-orchestrator`에서 처리한다.
+→ 여러 Service의 상태를 조합해야 하는 AI Use Case는 `AI Orchestrator`에서 처리한다.
 
 배경
-→ Urgent Message Summary처럼 user-service, realtime-message-service, auth-service, file-service의 상태를 함께 봐야 하는 기능이 존재한다.
+→ Urgent Message Summary처럼 user-service, WebSocket Service, auth-service, file-service의 상태를 함께 봐야 하는 기능이 존재한다.
 
 이유
 → 특정 Service에 Cross-domain AI Application 책임을 몰아주지 않기 위해 Application / Coordination Boundary를 둔다.
 
 Trade-off
-→ `ai-orchestrator`의 HA, execution state, cooldown, dedup, result routing 정책을 별도로 관리해야 한다.
+→ `AI Orchestrator`의 HA, execution state, cooldown, dedup, result routing 정책을 별도로 관리해야 한다.
 
 Status: Designed
 
@@ -85,13 +108,13 @@ Status: Designed
 ## Conversation Metadata와 Runtime State를 분리한다
 
 결정
-→ `ai-orchestrator`는 Product Metadata를 관리하고, `omni-ai-server`는 AI Runtime State를 관리한다.
+→ `AI Orchestrator`는 Product Metadata를 관리하고, `Omni AI Server`는 AI Runtime State를 관리한다.
 
 배경
 → Conversation list, title, owner, tenant, archive / delete는 Messenger Product 기능이고, user / assistant turns, summary, checkpoint, agent state는 다음 LLM 호출에 필요한 Runtime State다.
 
 이유
-→ Product Access Control과 LLM Context 관리를 분리해야 `ai-orchestrator`가 prompt runtime까지 소유하거나 `omni-ai-server`가 Messenger product metadata까지 알게 되는 일을 피할 수 있다.
+→ Product Access Control과 LLM Context 관리를 분리해야 `AI Orchestrator`가 prompt runtime까지 소유하거나 `Omni AI Server`가 Messenger product metadata까지 알게 되는 일을 피할 수 있다.
 
 Trade-off
 → Conversation Metadata Store와 AI History Store의 consistency / retention 정책을 별도로 설계해야 한다.
@@ -103,7 +126,7 @@ Status: Designed
 ## WebSocket Session과 ConversationId를 분리한다
 
 결정
-→ WebSocket Session은 `realtime-message-service`가 관리하고, AI Conversation은 `conversationId` 기준의 logical conversation으로 관리한다.
+→ WebSocket Session은 `WebSocket Service`가 관리하고, AI Conversation은 `conversationId` 기준의 logical conversation으로 관리한다.
 
 배경
 → reconnect, scale-out, session migration이 발생해도 동일한 AI Conversation은 이어질 수 있다.
@@ -145,7 +168,7 @@ Status: Designed
 → AI 결과는 영속성보다 현재 연결된 사용자에게 빠르게 전달하는 것이 중요한 경우가 많다.
 
 이유
-→ Reconnect, scale-out, instance restart가 발생할 수 있으므로 Result 전달 시점에 현재 Session Owner를 확인하고 대상 `realtime-message-service` instance로 low-latency routing한다.
+→ Reconnect, scale-out, instance restart가 발생할 수 있으므로 Result 전달 시점에 현재 Session Owner를 확인하고 대상 `WebSocket Service` instance로 low-latency routing한다.
 
 Trade-off
 → Session Registry 또는 현재 Session Owner 조회 경로가 필요하다.
@@ -161,7 +184,7 @@ Status: Designed
 
 → WebSocket 연결 시 Connection Registry에 `connectionId`와 현재 `ownerInstanceId`를 등록하고, `enterRoom` 시 `roomSessionId`를 생성해 `connectionId` / `ownerInstanceId`와 연결한다.
 
-→ AI Result push 시점에는 `triggerId` / `taskId` / `executionId`로 실행 상태를 확인하고, `connectionId` / `roomSessionId` / `routingRef`를 통해 Session Registry에서 현재 `ownerInstanceId`를 resolve한 뒤 해당 `realtime-message-service` instance로만 전달한다.
+→ AI Result push 시점에는 `triggerId` / `taskId` / `executionId`로 실행 상태를 확인하고, `connectionId` / `roomSessionId` / `routingRef`를 통해 Session Registry에서 현재 `ownerInstanceId`를 resolve한 뒤 해당 `WebSocket Service` instance로만 전달한다.
 
 배경
 → `enterRoom` API를 처리한 instance와 실제 WebSocket이 붙어 있는 instance가 다를 수 있다. AI 처리 중 reconnect, scale-out, scale-in, instance restart, session migration도 발생할 수 있다.
@@ -179,16 +202,16 @@ Status: Designed
 
 ---
 
-## ai-orchestrator는 Streaming Data Plane이 아니다
+## AI Orchestrator는 Streaming Data Plane이 아니다
 
 결정
-→ LLM Stream을 `ai-orchestrator`가 token-by-token proxy하지 않고, `omni-ai-server → Core NATS → realtime-message-service → Client` 경로로 전달한다.
+→ LLM Stream을 `AI Orchestrator`가 token-by-token proxy하지 않고, `Omni AI Server → Core NATS → WebSocket Service → Client` 경로로 전달한다.
 
 배경
-→ `ai-orchestrator`는 executionId, conversationId, workflow, policy, correlation, routing context를 관리하는 control path 역할을 가진다.
+→ `AI Orchestrator`는 executionId, conversationId, workflow, policy, correlation, routing context를 관리하는 control path 역할을 가진다.
 
 이유
-→ `ai-orchestrator`를 Streaming Data Plane으로 만들지 않고 Execution Control과 Coordination 책임에 집중시키기 위해서다.
+→ `AI Orchestrator`를 Streaming Data Plane으로 만들지 않고 Execution Control과 Coordination 책임에 집중시키기 위해서다.
 
 Trade-off
 → Stream event schema와 Core NATS subject, ordering, reconnect 정책을 별도로 설계해야 한다.
@@ -215,12 +238,12 @@ Status: Designed
 
 ---
 
-## Tool Runtime은 ai-orchestrator가 소유한다
+## Tool Runtime은 AI Orchestrator가 소유한다
 
 결정
-→ Server Tool과 Client Tool의 lifecycle은 `ai-orchestrator` 내부 Tool Runtime이 소유한다.
+→ Server Tool과 Client Tool의 lifecycle은 `AI Orchestrator` 내부 Tool Runtime이 소유한다.
 
-→ `omni-ai-server`는 LLM / LangGraph 실행 중 필요한 Tool을 결정하지만, Tool registry, schema validation, permission, dispatch, timeout, retry, result normalization, execution resume coordination은 Tool Runtime에서 관리한다.
+→ `Omni AI Server`는 LLM / LangGraph 실행 중 필요한 Tool을 결정하지만, Tool registry, schema validation, permission, dispatch, timeout, retry, result normalization, execution resume coordination은 Tool Runtime에서 관리한다.
 
 배경
 → Agent Runtime에서는 하나의 execution 안에서 server tool과 client tool이 여러 차례 섞여 호출될 수 있다. Tool lifecycle이 server/client 실행 위치에 따라 갈라지면 correlation, timeout, retry, audit, resume 로직이 중복된다.
@@ -241,17 +264,17 @@ Status: Designed
 ## Server Tool Adapter는 각 Service Boundary를 통과한다
 
 결정
-→ `omni-ai-server`가 server-side context / tool이 필요하다고 결정하면 `ai-orchestrator`의 Tool Runtime과 Server Tool Adapter를 통해 `auth-service`, `file-service`, `user-service`, `realtime-message-service`와 연결한다.
+→ `Omni AI Server`가 server-side context / tool이 필요하다고 결정하면 `AI Orchestrator`의 Tool Runtime과 Server Tool Adapter를 통해 `auth-service`, `file-service`, `user-service`, `WebSocket Service`와 연결한다.
 
-→ service split 전에는 target service 대신 현재 `WS service` API가 relay 대상이 될 수 있다.
+→ service split 전에는 target service 대신 현재 `WebSocket Service` API가 relay 대상이 될 수 있다.
 
-Tool 사용 여부와 tool input 구성은 `omni-ai-server`가 판단하고, Messenger Service로의 relay와 policy-aware access는 `ai-orchestrator`가 담당한다.
+Tool 사용 여부와 tool input 구성은 `Omni AI Server`가 판단하고, Messenger Service로의 relay와 policy-aware access는 `AI Orchestrator`가 담당한다.
 
 배경
 → AI Runtime이 인증, 파일, 사용자, 메시지 데이터를 직접 소유하지 않더라도 실행 중 해당 Service의 context나 tool이 필요할 수 있다.
 
 이유
-→ `omni-ai-server`가 각 Service의 DB나 내부 구현에 직접 결합하지 않고, Messenger Application 영역인 `ai-orchestrator`가 service API / gRPC, capability, policy-aware access를 통해 필요한 기능만 중계하게 하기 위해서다.
+→ `Omni AI Server`가 각 Service의 DB나 내부 구현에 직접 결합하지 않고, Messenger Application 영역인 `AI Orchestrator`가 service API / gRPC, capability, policy-aware access를 통해 필요한 기능만 중계하게 하기 위해서다.
 
 Trade-off
 → Server Tool schema, timeout, permission propagation, failure handling을 Tool Runtime 계약으로 설계해야 한다.
@@ -260,19 +283,19 @@ Status: Designed
 
 ---
 
-## Client는 omni-ai-server와 직접 연결하지 않는다
+## Client는 Omni AI Server와 직접 연결하지 않는다
 
 결정
-→ Client는 `realtime-message-service`와 WebSocket으로 통신하고, Client Tool은 `ai-orchestrator`의 Tool Runtime이 Core NATS와 `realtime-message-service`의 Client Tool Delivery를 통해 dispatch한다.
+→ Client는 `WebSocket Service`와 WebSocket으로 통신하고, Client Tool은 `AI Orchestrator`의 Tool Runtime이 Core NATS와 `WebSocket Service`의 Client Tool Delivery를 통해 dispatch한다.
 
 배경
-→ `realtime-message-service`는 Authentication, Session, WebSocket, Permission, Device State를 이미 소유한다.
+→ `WebSocket Service`는 Authentication, Session, WebSocket, Permission, Device State를 이미 소유한다.
 
 이유
-→ `omni-ai-server`가 Client 연결을 직접 소유하면 세션과 권한 책임이 중복된다. 동시에 Tool lifecycle을 `realtime-message-service`에 두면 server tool과 client tool의 execution state가 갈라진다.
+→ `Omni AI Server`가 Client 연결을 직접 소유하면 세션과 권한 책임이 중복된다. 동시에 Tool lifecycle을 `WebSocket Service`에 두면 server tool과 client tool의 execution state가 갈라진다.
 
 Trade-off
-→ Client Tool Calling에는 `ai-orchestrator / Tool Runtime`, Core NATS, `realtime-message-service` delivery hop이 추가된다. 대신 Tool lifecycle, audit, timeout, retry, result normalization, execution resume 책임을 중앙화할 수 있다.
+→ Client Tool Calling에는 `AI Orchestrator / Tool Runtime`, Core NATS, `WebSocket Service` delivery hop이 추가된다. 대신 Tool lifecycle, audit, timeout, retry, result normalization, execution resume 책임을 중앙화할 수 있다.
 
 Status: Designed
 

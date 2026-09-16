@@ -1,6 +1,6 @@
 # Server-driven AI
 
-> Role: Business Event / Client Request가 Messenger Service와 ai-orchestrator의 Policy를 거쳐 AiTask로 전환되는 흐름을 설명하는 문서
+> Role: Business Event / Client Request가 Messenger Service와 AI Orchestrator의 Policy를 거쳐 AiTask로 전환되는 흐름을 설명하는 문서
 > Status: Designed
 > 이 문서는 Messenger Application 영역이 Business Event와 Client Request를 AI 실행 후보로 받아 `SKIP / EXECUTE`를 판단하는 구조를 설명한다.
 
@@ -13,7 +13,7 @@ Server-driven AI의 핵심은 AI Runtime이 먼저 기능을 시작하지 않는
 ```text
 Business Event 또는 Client Request
         ↓
-realtime-message-service / user-service / ai-orchestrator
+WebSocket Service / user-service / AI Orchestrator
         ↓
 Business Policy / Trigger Policy
         ↓
@@ -43,24 +43,24 @@ Messenger 내부의 Business Event가 AI 실행 후보가 된다.
 ```text
 Business Event
     ↓
-realtime-message-service 또는 user-service
+WebSocket Service 또는 user-service
     ↓
 NATS JetStream (필요 시)
     ↓
-ai-orchestrator 또는 Service-local Handler
+AI Orchestrator 또는 Service-local Handler
     ↓
 Feature / Permission / Cooldown / Context Policy
     ↓
 SKIP or EXECUTE
 ```
 
-Single-domain AI Use Case는 해당 Service가 직접 판단할 수 있다. 여러 Service의 상태를 조합해야 하는 Cross-domain AI Use Case는 `ai-orchestrator`가 Trigger를 수신해 Context를 조합한다.
+Single-domain AI Use Case는 해당 Service가 직접 판단할 수 있다. 여러 Service의 상태를 조합해야 하는 Cross-domain AI Use Case는 `AI Orchestrator`가 Trigger를 수신해 Context를 조합한다.
 
 Status: Designed
 
 ### Client-explicit path
 
-사용자가 명시적으로 AI 기능을 요청하는 경우는 `realtime-message-service`를 거친다.
+사용자가 명시적으로 AI 기능을 요청하는 경우는 `WebSocket Service`를 거친다.
 
 예:
 
@@ -73,20 +73,20 @@ Status: Designed
 ```text
 Client Request
     ↓ WebSocket
-realtime-message-service
+WebSocket Service
     ↓
 Authentication / Session / Permission
     ↓
 Client Context Scope 확인
     ↓
-ai-orchestrator
+AI Orchestrator
     ↓
 SKIP or EXECUTE
 ```
 
-Client Request는 직접 `omni-ai-server`로 전달되지 않는다.
+Client Request는 직접 `Omni AI Server`로 전달되지 않는다.
 
-Client Request를 처리한 `realtime-message-service` instance가 최종 WebSocket delivery owner라고 가정하지 않는다. `enterRoom` 같은 요청에서는 `roomSessionId`를 만들고 현재 `connectionId` / `ownerInstanceId`와 연결하되, AI Result push 시점에는 Session Registry에서 현재 owner를 다시 확인한다.
+Client Request를 처리한 `WebSocket Service` instance가 최종 WebSocket delivery owner라고 가정하지 않는다. `enterRoom` 같은 요청에서는 `roomSessionId`를 만들고 현재 `connectionId` / `ownerInstanceId`와 연결하되, AI Result push 시점에는 Session Registry에서 현재 owner를 다시 확인한다.
 
 Status: Designed
 
@@ -114,7 +114,7 @@ Status: Designed
 
 ## 4. Service / Handler / Orchestrator
 
-Service-local Handler와 `ai-orchestrator`는 정책을 직접 모두 구현하는 거대한 객체가 아니라, Policy를 조합하고 실행 순서를 관리하는 Application 계층이다.
+Service-local Handler와 `AI Orchestrator`는 정책을 직접 모두 구현하는 거대한 객체가 아니라, Policy를 조합하고 실행 순서를 관리하는 Application 계층이다.
 
 공통 책임:
 
@@ -124,17 +124,17 @@ Service-local Handler와 `ai-orchestrator`는 정책을 직접 모두 구현하�
 - `SKIP / EXECUTE` 결정
 - `EXECUTE`인 경우 AiTask 생성
 
-`ai-orchestrator`의 추가 책임:
+`AI Orchestrator`의 추가 책임:
 
 - Trigger / Execution correlation
 - Cross-domain Context Assembly
 - Cooldown / duplicate trigger 방지
 - AI Execution State 관리
 - Conversation Metadata 관리
-- `omni-ai-server` 호출
+- `Omni AI Server` 호출
 - Result Routing / Realtime Target Resolution
 
-`ai-orchestrator`가 가지지 않는 책임:
+`AI Orchestrator`가 가지지 않는 책임:
 
 - 사용자 상태의 Source of Truth
 - 메시지 상태의 Source of Truth
@@ -155,7 +155,7 @@ Status: Designed
 ```text
 Room Enter
   ↓
-realtime-message-service
+WebSocket Service
   ├─ roomSessionId 생성
   ├─ connectionId / ownerInstanceId 연결
   ├─ FeatureEnabledPolicy
@@ -173,7 +173,7 @@ Status: Designed
 ```text
 Client AI Request
   ↓
-realtime-message-service
+WebSocket Service
   ├─ Authentication / Session / Permission
   ├─ Client Context Scope 확인
   ├─ connectionId / roomSessionId correlation
@@ -195,7 +195,7 @@ user-service
   ↓
 NATS JetStream
   ↓
-ai-orchestrator
+AI Orchestrator
   ├─ AwayDurationPolicy
   ├─ UnreadMessagePolicy
   ├─ UrgentMessagePolicy
@@ -212,7 +212,7 @@ Status: Designed
 ```text
 Label Matched
   ↓
-user-service 또는 ai-orchestrator
+user-service 또는 AI Orchestrator
   ↓
 Business Policy
   ↓
@@ -241,14 +241,14 @@ Policy
 AiTask
 ```
 
-여러 Service의 상태를 조합하거나 재처리가 필요한 Trigger는 NATS JetStream을 통해 `ai-orchestrator`로 전달한다.
+여러 Service의 상태를 조합하거나 재처리가 필요한 Trigger는 NATS JetStream을 통해 `AI Orchestrator`로 전달한다.
 
 ```text
 USER_RETURNED
   ↓
 NATS JetStream
   ↓
-ai-orchestrator
+AI Orchestrator
   ↓
 Unread / Room / File / Tenant Policy 조합
   ↓
@@ -263,7 +263,7 @@ Status: Designed
 
 ## 7. Business Policy와 Execution Policy
 
-Business Policy와 Trigger Policy는 `omni-ai-server` 호출 이전에 끝난다.
+Business Policy와 Trigger Policy는 `Omni AI Server` 호출 이전에 끝난다.
 
 - Feature Enable
 - Permission
@@ -290,9 +290,9 @@ Status: Designed
 
 ## 8. Context 조회 전략
 
-`ai-orchestrator`가 모든 Service를 매번 동기 RPC로 호출하는 synchronous fan-out 구조는 지양한다.
+`AI Orchestrator`가 모든 Service를 매번 동기 RPC로 호출하는 synchronous fan-out 구조는 지양한다.
 
-각 Domain Service가 소유한 AI Context는 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 조회한다. 일정 수준의 stale을 허용할 수 있는 Context도 `ai-orchestrator`가 Domain DB / Redis를 직접 읽는 방식이 아니라, Service가 제공하는 read API나 event-driven Projection으로 제공하는 방향을 우선한다.
+각 Domain Service가 소유한 AI Context는 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 조회한다. 일정 수준의 stale을 허용할 수 있는 Context도 `AI Orchestrator`가 Domain DB / Redis를 직접 읽는 방식이 아니라, Service가 제공하는 read API나 event-driven Projection으로 제공하는 방향을 우선한다.
 
 예:
 
@@ -301,7 +301,7 @@ Status: Designed
 - presence snapshot
 - 최근 room 목록
 
-`ai-orchestrator`가 직접 DB / Redis를 사용할 수 있는 범위는 자신이 소유한 실행 조정 상태다.
+`AI Orchestrator`가 직접 DB / Redis를 사용할 수 있는 범위는 자신이 소유한 실행 조정 상태다.
 
 예:
 
@@ -317,10 +317,10 @@ Status: Designed
 원칙:
 
 ```text
-realtime-message-service / user-service / auth-service / file-service
+WebSocket Service / user-service / auth-service / file-service
 = Source of Truth
 
-ai-orchestrator
+AI Orchestrator
 = Owner of AI Coordination State / Coordination Boundary
 ```
 

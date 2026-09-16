@@ -18,8 +18,9 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 다음과 같은 결정은 별도 ADR로 남긴다.
 
 - Queue 기술 또는 운영 방식 선택
-- Current WS service split / migration 순서
-- ai-orchestrator boundary와 HA 전략
+- Current WebSocket Service split / migration 순서
+- AI Orchestrator runtime 선택
+- AI Orchestrator boundary와 HA 전략
 - NATS JetStream / Core NATS 사용 범위
 - AiTask schema의 큰 변경
 - Conversation Metadata Store 선택
@@ -88,3 +89,4 @@ Status: Proposed | Accepted | Superseded
 
 - [001. Session Registry Based AI Result Routing](001-session-registry-result-routing.md)
 - [002. Tool Runtime Ownership and Client Tool Dispatch](002-tool-runtime-ownership-client-tool-dispatch.md)
+- [003. Spring Boot Runtime for AI Orchestrator](003-spring-boot-runtime.md)

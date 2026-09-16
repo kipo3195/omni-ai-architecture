@@ -16,7 +16,7 @@ Execution Mode
 └─ Agent Execution
 
 Context / Tool Provider
-└─ Tool Request via ai-orchestrator Tool Runtime
+└─ Tool Request via AI Orchestrator Tool Runtime
 ```
 
 Workflow Execution과 Agent Execution 모두 필요한 경우 Client Integration을 사용할 수 있다.
@@ -27,17 +27,17 @@ Status: Designed
 
 ## 2. Why Not Direct Connection
 
-Client는 `omni-ai-server`와 직접 연결하지 않는다.
+Client는 `Omni AI Server`와 직접 연결하지 않는다.
 
 ```text
 Client
   ↕ WebSocket
-realtime-message-service
+WebSocket Service
   ↕
-ai-orchestrator / omni-ai-server
+AI Orchestrator / Omni AI Server
 ```
 
-`realtime-message-service`가 이미 다음 책임을 갖고 있기 때문이다.
+`WebSocket Service`가 이미 다음 책임을 갖고 있기 때문이다.
 
 - Authentication
 - User Session
@@ -51,12 +51,12 @@ Status: Designed
 
 ## 3. Client Tool Delivery
 
-Client Context나 Client Tool이 필요한 경우 `ai-orchestrator`의 Tool Runtime이 lifecycle을 소유하고, `realtime-message-service`는 Client Tool Delivery를 담당한다.
+Client Context나 Client Tool이 필요한 경우 `AI Orchestrator`의 Tool Runtime이 lifecycle을 소유하고, `WebSocket Service`는 Client Tool Delivery를 담당한다.
 
 ```text
-omni-ai-server
+Omni AI Server
    ↓ Client Context / Tool 필요
-ai-orchestrator Tool Runtime
+AI Orchestrator Tool Runtime
    ↓ Core NATS
 Client Tool Delivery
    ↓ WebSocket
@@ -64,9 +64,9 @@ Client Tool
    ↓
 Client Tool Delivery
    ↓ Core NATS
-ai-orchestrator Tool Runtime
+AI Orchestrator Tool Runtime
    ↓
-omni-ai-server resume
+Omni AI Server resume
 ```
 
 Tool Runtime 책임:
@@ -88,9 +88,9 @@ Client Tool Delivery 책임:
 - disconnect 감지
 - 현재 Session Owner 기준 delivery
 
-Client Tool Delivery는 별도 서비스가 아니라 `realtime-message-service`의 responsibility다.
+Client Tool Delivery는 별도 서비스가 아니라 `WebSocket Service`의 responsibility다.
 
-`realtime-message-service`는 client session과 WebSocket delivery를 소유하지만 Tool lifecycle owner는 아니다. Tool result payload는 `ai-orchestrator`의 Tool Runtime으로 반환되고, Tool Runtime이 상태를 완료 처리한 뒤 `omni-ai-server` execution resume을 조정한다.
+`WebSocket Service`는 client session과 WebSocket delivery를 소유하지만 Tool lifecycle owner는 아니다. Tool result payload는 `AI Orchestrator`의 Tool Runtime으로 반환되고, Tool Runtime이 상태를 완료 처리한 뒤 `Omni AI Server` execution resume을 조정한다.
 
 Client Tool Delivery는 요청을 보낸 instance가 아니라 Session Registry의 현재 `ownerInstanceId`를 기준으로 target WebSocket session을 찾는다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다.
 
@@ -103,24 +103,24 @@ Status: Designed
 Server-side Context나 Tool이 필요한 경우에는 Tool Runtime의 Server Tool Adapter를 사용한다.
 
 ```text
-omni-ai-server
-→ ai-orchestrator Tool Runtime
+Omni AI Server
+→ AI Orchestrator Tool Runtime
 → Server Tool Adapter
-→ auth-service / file-service / user-service / realtime-message-service
+→ auth-service / file-service / user-service / WebSocket Service
 ```
 
 Client-side Context나 Tool이 필요한 경우에는 Tool Runtime에서 Core NATS와 Client Tool Delivery를 통해 Client에 dispatch한다.
 
 ```text
-omni-ai-server
-→ ai-orchestrator Tool Runtime
+Omni AI Server
+→ AI Orchestrator Tool Runtime
 → Core NATS
-→ Client Tool Delivery inside realtime-message-service
+→ Client Tool Delivery inside WebSocket Service
 → Client Tool
 → Client Tool Delivery
 → Core NATS
-→ ai-orchestrator Tool Runtime
-→ omni-ai-server resume
+→ AI Orchestrator Tool Runtime
+→ Omni AI Server resume
 ```
 
 Tool Runtime은 server/client tool 공통 lifecycle을 관리한다. Server Tool Adapter는 service API / gRPC 호출, service capability, policy-aware access를 다룬다. Client Tool Delivery는 WebSocket session lookup과 client delivery / result ingress를 다룬다.
@@ -178,13 +178,13 @@ Status: Designed
 Client
 → Scope Reduction
 
-realtime-message-service
+WebSocket Service
 → Business Filtering
 
-ai-orchestrator
+AI Orchestrator
 → Cross-domain Context Assembly / Trigger Filtering
 
-omni-ai-server
+Omni AI Server
 → Semantic Filtering / Ranking / Summary
 ```
 
@@ -227,7 +227,7 @@ Workflow Execution에서도 Client Context가 필요할 수 있다.
 ```text
 Workflow Execution
 → Client Context 필요
-→ ai-orchestrator Tool Runtime
+→ AI Orchestrator Tool Runtime
 → Client Tool Delivery
 → Client Tool
 → Context 확보
@@ -240,7 +240,7 @@ Agent Execution에서는 Runtime 중 Tool 사용 여부를 동적으로 결정�
 Agent Execution
 → Tool Decision
 → Client Tool 선택
-→ ai-orchestrator Tool Runtime
+→ AI Orchestrator Tool Runtime
 → Client Tool Delivery
 → Client Tool
 → Tool Result
@@ -271,16 +271,16 @@ Status: Planned
 
 ## 11. Streaming Result Delivery
 
-LLM Streaming Result는 `ai-orchestrator`가 token-by-token proxy하지 않는다.
+LLM Streaming Result는 `AI Orchestrator`가 token-by-token proxy하지 않는다.
 
 ```text
-omni-ai-server
+Omni AI Server
 → Core NATS
-→ realtime-message-service
+→ WebSocket Service
 → Client WebSocket
 ```
 
-`realtime-message-service` 책임:
+`WebSocket Service` 책임:
 
 - Core NATS AI Stream 수신
 - Session Registry 또는 local session map을 통한 Target WebSocket Session 탐색
@@ -288,7 +288,7 @@ omni-ai-server
 - Messenger Client WebSocket Protocol로 변환
 - Client에 Stream Push
 
-`realtime-message-service`가 담당하지 않는 책임:
+`WebSocket Service`가 담당하지 않는 책임:
 
 - AI Trigger Policy
 - Cross-domain Context Assembly

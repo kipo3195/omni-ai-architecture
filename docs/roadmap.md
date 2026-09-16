@@ -6,15 +6,16 @@
 
 ---
 
-## Phase 1. Current WS 연동과 Omni AI 기본 구조
+## Phase 1. Current WebSocket Service / TCP Realtime Service 연동과 Omni AI 기본 구조
 
 Status: Planned
 
 목표:
 
-- 현재 WS service 연동
-- `ai-orchestrator` boundary 정의
-- `omni-ai-server` Task Router
+- 현재 WebSocket Service 연동
+- TCP Realtime Service 연동
+- `AI Orchestrator` boundary 정의
+- `Omni AI Server` Task Router
 - Business Policy 조합
 - `SKIP / EXECUTE` 판단
 - AiTask 생성
@@ -23,9 +24,9 @@ Status: Planned
 검증 포인트:
 
 - Business Event와 AiTask 분리
-- 현재 WS service와 연동해도 `ai-orchestrator` / `omni-ai-server` 경계가 유지되는지
-- Single-domain Use Case가 과도하게 `ai-orchestrator`에 의존하지 않는지
-- `omni-ai-server`가 Business Rule을 소유하지 않는지
+- 현재 WebSocket Service, TCP Realtime Service와 연동해도 `AI Orchestrator` / `Omni AI Server` 경계가 유지되는지
+- Single-domain Use Case가 과도하게 `AI Orchestrator`에 의존하지 않는지
+- `Omni AI Server`가 Business Rule을 소유하지 않는지
 
 ---
 
@@ -37,10 +38,10 @@ Status: Planned
 
 - 상태 변경 기반 긴급 메시지 요약 또는 Label 기반 기능
 - NATS JetStream 기반 Business Event / AI Trigger 전달
-- `ai-orchestrator`의 Context Assembly
+- `AI Orchestrator`의 Context Assembly
 - Cooldown / dedup / trigger expiration 정책
 - Core NATS 기반 Result Routing
-- `omni-ai-server → Core NATS → realtime-message-service` Streaming Data Path
+- `Omni AI Server → Core NATS → WebSocket Service` Streaming Data Path
 
 검증 포인트:
 
@@ -48,7 +49,7 @@ Status: Planned
 - Trigger가 오래된 경우 실행을 skip할 수 있는지
 - Reconnect / scale-out 이후 현재 Session Owner로 결과가 전달되는지
 - Structured Result가 Delivery와 잘 연결되는지
-- `ai-orchestrator`가 token stream을 proxy하지 않는지
+- `AI Orchestrator`가 token stream을 proxy하지 않는지
 
 ---
 
@@ -58,7 +59,7 @@ Status: Planned
 
 목표:
 
-- Tool Runtime inside `ai-orchestrator`
+- Tool Runtime inside `AI Orchestrator`
 - Tool Registry / Tool Lifecycle State
 - Server Tool Adapter
 - Client Tool Registry
@@ -71,9 +72,9 @@ Status: Planned
 
 검증 포인트:
 
-- Client가 `omni-ai-server`와 직접 연결되지 않는지
+- Client가 `Omni AI Server`와 직접 연결되지 않는지
 - Tool Runtime이 server/client tool lifecycle을 일관되게 관리하는지
-- Server Tool Adapter가 `auth-service` / `file-service` / `user-service` / `realtime-message-service` 경계를 지키는지
+- Server Tool Adapter가 `auth-service` / `file-service` / `user-service` / `WebSocket Service` 경계를 지키는지
 - Client Tool Delivery가 현재 Session Owner 기준으로 target WebSocket session을 찾는지
 - Client Tool이 최소 범위 Context만 반환하는지
 - Workflow Execution에서도 Client Integration을 사용할 수 있는지
@@ -163,9 +164,9 @@ maxTokens
 
 | Phase | Goal | Status |
 | --- | --- | --- |
-| Phase 1 | Current WS 연동과 Omni AI 기본 구조 | Planned |
+| Phase 1 | Current WebSocket Service / TCP Realtime Service 연동과 Omni AI 기본 구조 | Planned |
 | Phase 2 | Cross-domain Trigger / Result Routing 검증 | Planned |
 | Phase 3 | Client Integration | Planned |
 | Phase 4 | Stateful Chatbot / Agent Runtime | Planned |
 | Phase 5 | AI Context Projection / Cache / Observability | Planned |
-| Future | WS service responsibility split | Planned |
+| Future | WebSocket Service responsibility split | Planned |

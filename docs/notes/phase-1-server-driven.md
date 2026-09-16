@@ -7,26 +7,26 @@
 
 ## Scope
 
-Phase 1의 목표는 Service Boundary와 Server-driven 기본 구조, `ai-orchestrator` boundary를 작게 E2E로 검증하는 것이다.
+Phase 1의 목표는 Service Boundary와 Server-driven 기본 구조, `AI Orchestrator` boundary를 작게 E2E로 검증하는 것이다.
 
 대상 흐름:
 
 ```text
 ROOM_ENTERED
   ↓
-realtime-message-service
+WebSocket Service
   ↓
 Business Policy
   ↓
 AiTask(CONVERSATION_START)
   ↓
-omni-ai-server Task Router
+Omni AI Server Task Router
   ↓
 Workflow Execution
   ↓
 Structured Result
   ↓
-ai-orchestrator 또는 realtime-message-service delivery
+AI Orchestrator 또는 WebSocket Service delivery
   ↓
 Client Suggestion
 ```
@@ -58,7 +58,7 @@ Cross-domain Use Case와 NATS JetStream / Core NATS Result Routing은 Phase 2에
 
 ## Open Questions
 
-- `ai-orchestrator`를 Phase 1에서 thin boundary로 둘지, Conversation Start는 service-local handler로만 둘지
+- `AI Orchestrator`를 Phase 1에서 thin boundary로 둘지, Conversation Start는 service-local handler로만 둘지
 - Session Registry와 Result Routing을 Phase 1에서 어느 수준까지 stub 처리할지
 - `triggerId / taskId / executionId / conversationId` correlation 필드를 Phase 1 계약에 포함할지
 
