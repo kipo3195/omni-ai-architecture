@@ -95,7 +95,7 @@ flowchart TD
     A -->|Client AI Request| G[ai-orchestrator]
     A --> C[service<br/> user / auth / file]
 
-    C --> F[NATS JetStream<br/>Business Event / AI Trigger]
+    C --> F[Business Event / AI Trigger]
     B --> F
     F --> G
 
@@ -104,24 +104,17 @@ flowchart TD
     H -- Yes --> J[AiTask / executionId]
     J --> K[omni-ai-server]
 
-    K <--> M[Workflow / Agent Execution]
-    K -->|Tool Request| G
+    K --> M[Workflow / Agent Execution <br/> inside omni-ai-server]
+    M -->|Tool Request| G
     G --> L[Tool Runtime<br/>inside ai-orchestrator]
     L --> N[Server Tool Adapter]
     N <--> B
     N <--> C
 
-    L -->|Client Tool Dispatch| R[Core NATS]
-    R --> O[Client Tool Delivery<br/>inside realtime-message-service]
-    O --> P[Client Tool]
-    P --> O
-    O --> R
-    R --> L
-    L -->|Tool Result / Resume| K
+    L <-->|Client Tool Dispatch / Result| B
+    L -->|Tool Result / Resume| M
 
-    K --> Q[Streaming / Structured Result]
-    Q --> R
-    R --> B
+    M -->|Streaming / Structured Result| B
 ```
 
 ### Responsibility

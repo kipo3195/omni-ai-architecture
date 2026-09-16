@@ -50,18 +50,10 @@ flowchart TD
     V <--> D
     V <--> E
     V <--> B
-    O -->|Client Tool Dispatch| T[Core NATS]
-    T --> Q[Client Tool Delivery<br/>inside realtime-message-service]
-    Q --> R[Client Tool]
-    R --> Q
-    Q --> T
-    T --> O
-    O -->|Tool Result / Resume| K
+    O <-->|Client Tool Dispatch / Result| B
+    O -->|Tool Result / Resume| N
 
-    K --> S[Streaming / Structured Result]
-    S --> T
-    T --> U[realtime-message-service<br/>Target Session Push]
-    U --> A
+    K -->|Streaming / Structured Result| B
 ```
 
 Status: Designed
