@@ -39,26 +39,27 @@ flowchart TD
     H -- Yes --> J[AiTask / executionId]
     J --> K[omni-ai-server<br/>Python / LangGraph / LLM / Runtime]
 
-    K -->|Server Tool Request| G
-    G --> O[Server Tool Relay<br/>inside ai-orchestrator]
-    O <--> C
-    O <--> D
-    O <--> E
-    O <--> B
-
     K --> L[Workflow Execution]
     K --> M[Agent Execution]
     L --> N[Context / Tool Provider]
     M --> N
-    N --> P[Client Integration]
-
-    P --> Q[Client Tool Relay<br/>inside realtime-message-service]
+    N -->|Tool Request| G
+    G --> O[Tool Runtime<br/>inside ai-orchestrator]
+    O --> V[Server Tool Adapter]
+    V <--> C
+    V <--> D
+    V <--> E
+    V <--> B
+    O -->|Client Tool Dispatch| T[Core NATS]
+    T --> Q[Client Tool Delivery<br/>inside realtime-message-service]
     Q --> R[Client Tool]
     R --> Q
-    Q --> P
+    Q --> T
+    T --> O
+    O -->|Tool Result / Resume| K
 
     K --> S[Streaming / Structured Result]
-    S --> T[Core NATS]
+    S --> T
     T --> U[realtime-message-service<br/>Target Session Push]
     U --> A
 ```
@@ -78,12 +79,13 @@ Status: Designed
 | auth-service | Authentication, Token Policy, JWT / Cookie Policy, User / Tenant Authentication Context | Designed |
 | file-service | File Upload / Download, Metadata, Permission, Attachment | Designed |
 | NATS JetStream | 재처리가 필요한 Business Event / AI Trigger 전달, durable consumer, ACK / retry | Designed |
-| ai-orchestrator | Cross-domain AI Use Case 조정, Trigger Policy, Context Assembly, Cooldown / Dedup, Execution Correlation, Conversation Metadata, Server Tool Relay, Result Routing | Designed |
+| ai-orchestrator | Cross-domain AI Use Case 조정, Trigger Policy, Context Assembly, Cooldown / Dedup, Execution Correlation, Conversation Metadata, Tool Runtime, Result Routing | Designed |
 | omni-ai-server | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State | Designed |
-| Server Tool Relay | `ai-orchestrator` 내부 책임. Server-side context / tool 요청을 `auth-service`, `file-service`, `user-service`, `realtime-message-service`로 중계 | Designed |
+| Tool Runtime | `ai-orchestrator` 내부 책임. Tool registry, schema validation, permission, lifecycle, dispatch, timeout, retry, result normalization, execution resume 조정 | Designed |
+| Server Tool Adapter | Tool Runtime의 server-side adapter. Server-side context / tool 요청을 `auth-service`, `file-service`, `user-service`, `realtime-message-service`로 중계 | Designed |
 | Client Integration | Client Context / Client Tool을 `omni-ai-server`에 연결하는 Provider 계층 | Designed |
-| Client Tool Relay | `realtime-message-service` 내부 책임. Client Tool 요청 전달, Session lookup, Permission / Capability Check, Response Correlation | Designed |
-| Core NATS / Realtime Delivery | LLM Streaming Result를 현재 Session Owner 기준으로 routing | Designed |
+| Client Tool Delivery | `realtime-message-service` 내부 책임. Client Tool 요청 전달, Session lookup, WebSocket delivery, Client result ingress | Designed |
+| Core NATS / Realtime Delivery | LLM Streaming, Execution Progress, Client Tool dispatch를 현재 Session Owner 기준으로 routing | Designed |
 
 ---
 
@@ -125,10 +127,10 @@ file-service
 → File / Attachment / Permission
 
 ai-orchestrator
-→ Trigger Policy / Cross-domain Context Assembly / Execution Correlation / Conversation Metadata / Result Routing
+→ Trigger Policy / Cross-domain Context Assembly / Execution Correlation / Conversation Metadata / Tool Runtime / Result Routing
 
 omni-ai-server
-→ Prompt / Workflow / LangGraph / LLM Execution / Conversation History / Agent State
+→ Prompt / Workflow / LangGraph / LLM Execution / Tool Decision / Conversation History / Agent State
 ```
 
 `ai-orchestrator`는 사용자 상태, 메시지 상태, 인증 상태, 파일 상태의 Source of Truth가 아니다. 각 Domain Service가 소유한 상태는 해당 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 조회한다. `ai-orchestrator`가 직접 DB / Redis를 사용하는 범위는 cooldown, deduplication, execution correlation, conversation metadata처럼 자신이 소유한 실행 조정 상태로 제한한다.
@@ -206,24 +208,23 @@ Execution Mode
 └─ Agent Execution
 
 Context / Tool Provider
-├─ Server Tool Request via ai-orchestrator
-└─ Client Integration
+└─ Tool Request via ai-orchestrator Tool Runtime
 ```
 
-Server Tool과 Client Tool 모두 어떤 Tool이 필요한지 판단하는 주체는 `omni-ai-server`다. 다만 Relay 책임은 다르다.
+Server Tool과 Client Tool 모두 어떤 Tool이 필요한지 판단하는 주체는 `omni-ai-server`다. Tool lifecycle의 owner는 `ai-orchestrator`의 Tool Runtime이고, 실제 실행 위치만 adapter와 delivery path로 분리한다.
 
 ```text
-Server Tool Decision
+Tool Decision
 = omni-ai-server
 
-Server Tool Relay
-= ai-orchestrator
+Tool Lifecycle
+= ai-orchestrator Tool Runtime
 
-Client Tool Decision
-= omni-ai-server
+Server Tool Execution
+= ai-orchestrator Tool Runtime → Server Tool Adapter → target service
 
-Client Tool Relay
-= realtime-message-service
+Client Tool Execution
+= ai-orchestrator Tool Runtime → Core NATS → realtime-message-service Client Tool Delivery → Client
 ```
 
 Status: Designed
@@ -344,11 +345,23 @@ Control Path
 Streaming Data Path
 = omni-ai-server → Core NATS → realtime-message-service → Client
 
-omni-ai-server ↔ realtime-message-service Client Tool Relay
-= Internal RPC
+Execution Progress Path
+= omni-ai-server → Core NATS → realtime-message-service → Client
+
+Tool Control Path
+= omni-ai-server → ai-orchestrator Tool Runtime
+
+Server Tool Dispatch
+= ai-orchestrator Tool Runtime → target service
+
+Client Tool Dispatch
+= ai-orchestrator Tool Runtime → Core NATS → realtime-message-service → Client
+
+Client Tool Result
+= Client → realtime-message-service → Core NATS → ai-orchestrator Tool Runtime → omni-ai-server resume
 ```
 
-통일하는 대상은 Transport가 아니라 `triggerId`, `taskId`, `executionId`, `conversationId`, `connectionId`, `roomSessionId`, `toolCallId` 같은 실행 계약과 식별자이다.
+통일하는 대상은 Transport가 아니라 `triggerId`, `taskId`, `executionId`, `conversationId`, `connectionId`, `roomSessionId`, `toolCallId`, `toolAttempt`, `idempotencyKey` 같은 실행 계약과 식별자이다.
 
 `ai-orchestrator`가 관리하는 Control Path:
 
@@ -359,6 +372,7 @@ workflow
 policy
 correlation
 routing context
+tool lifecycle
 ```
 
 `omni-ai-server`가 Core NATS로 전달하는 Stream Event 후보:
@@ -367,14 +381,16 @@ routing context
 START
 STATUS
 DELTA
-TOOL_CALL
+PROGRESS
 COMPLETED
 FAILED
 ```
 
 `realtime-message-service`는 Core NATS에서 받은 stream event를 Messenger Client WebSocket Protocol로 변환하여 전달한다.
 
-Client Tool request / response는 `ai-orchestrator`를 data path로 사용하지 않는다. `omni-ai-server`가 tool call을 요청하고, `realtime-message-service`의 Client Tool Relay가 target WebSocket session으로 relay한 뒤 결과를 `omni-ai-server`로 반환한다.
+Client Tool request / response는 Tool Runtime을 data path로 사용한다. `omni-ai-server`가 tool call을 결정하면 `ai-orchestrator`의 Tool Runtime이 lifecycle을 생성하고, `realtime-message-service`의 Client Tool Delivery가 target WebSocket session으로 전달한 뒤 결과를 Tool Runtime으로 반환한다.
+
+LLM token stream과 execution progress는 Tool Runtime을 통과하지 않는다. Tool Runtime은 `tool_started`, `tool_progress`, `tool_completed`, `tool_failed`, `tool_timeout` 같은 Tool lifecycle event를 관리하고, 고빈도 token stream은 `omni-ai-server → Core NATS → realtime-message-service → Client` 경로로 전달한다.
 
 Status: Designed
 

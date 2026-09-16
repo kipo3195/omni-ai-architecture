@@ -200,7 +200,7 @@ Status: Designed
 ## Client Integration은 Execution Mode가 아니라 Provider이다
 
 결정
-→ Workflow / Agent는 실행 방식이고, Server Tool Relay / Client Tool Relay는 Context / Tool Provider로 분리한다.
+→ Workflow / Agent는 실행 방식이고, Server Tool / Client Tool은 Context / Tool Provider로 분리한다.
 
 배경
 → Tool을 사용한다고 해서 모두 Agent Execution인 것은 아니다. 사전 정의 Workflow도 server-side context나 client context가 필요할 수 있다.
@@ -215,10 +215,33 @@ Status: Designed
 
 ---
 
-## Server Tool Relay는 각 Service Boundary를 통과한다
+## Tool Runtime은 ai-orchestrator가 소유한다
 
 결정
-→ `omni-ai-server`가 server-side context / tool이 필요할 때 `ai-orchestrator`의 Server Tool Relay를 통해 `auth-service`, `file-service`, `user-service`, `realtime-message-service`와 연결한다.
+→ Server Tool과 Client Tool의 lifecycle은 `ai-orchestrator` 내부 Tool Runtime이 소유한다.
+
+→ `omni-ai-server`는 LLM / LangGraph 실행 중 필요한 Tool을 결정하지만, Tool registry, schema validation, permission, dispatch, timeout, retry, result normalization, execution resume coordination은 Tool Runtime에서 관리한다.
+
+배경
+→ Agent Runtime에서는 하나의 execution 안에서 server tool과 client tool이 여러 차례 섞여 호출될 수 있다. Tool lifecycle이 server/client 실행 위치에 따라 갈라지면 correlation, timeout, retry, audit, resume 로직이 중복된다.
+
+이유
+→ Tool이라는 제품/플랫폼 개념의 ownership을 하나로 유지하고, 실행 위치 차이는 adapter와 delivery path로 제한하기 위해서다.
+
+Trade-off
+→ Client Tool도 Tool Runtime을 경유하므로 hop이 늘고, Orchestrator 부하와 장애 영향 범위가 커질 수 있다. 대신 durable execution state, audit, permission, 중복 방지, resume 모델을 일관되게 가져갈 수 있다.
+
+Related
+→ [ADR 002. Tool Runtime Ownership and Client Tool Dispatch](decisions/002-tool-runtime-ownership-client-tool-dispatch.md)
+
+Status: Designed
+
+---
+
+## Server Tool Adapter는 각 Service Boundary를 통과한다
+
+결정
+→ `omni-ai-server`가 server-side context / tool이 필요하다고 결정하면 `ai-orchestrator`의 Tool Runtime과 Server Tool Adapter를 통해 `auth-service`, `file-service`, `user-service`, `realtime-message-service`와 연결한다.
 
 → service split 전에는 target service 대신 현재 `WS service` API가 relay 대상이 될 수 있다.
 
@@ -231,7 +254,7 @@ Tool 사용 여부와 tool input 구성은 `omni-ai-server`가 판단하고, Mes
 → `omni-ai-server`가 각 Service의 DB나 내부 구현에 직접 결합하지 않고, Messenger Application 영역인 `ai-orchestrator`가 service API / gRPC, capability, policy-aware access를 통해 필요한 기능만 중계하게 하기 위해서다.
 
 Trade-off
-→ Server Tool schema, timeout, permission propagation, failure handling을 별도로 설계해야 한다.
+→ Server Tool schema, timeout, permission propagation, failure handling을 Tool Runtime 계약으로 설계해야 한다.
 
 Status: Designed
 
@@ -240,16 +263,16 @@ Status: Designed
 ## Client는 omni-ai-server와 직접 연결하지 않는다
 
 결정
-→ Client는 `realtime-message-service`와 WebSocket으로 통신하고, `omni-ai-server`는 `realtime-message-service` 내부의 Client Tool Relay를 통해 Client Tool을 사용한다.
+→ Client는 `realtime-message-service`와 WebSocket으로 통신하고, Client Tool은 `ai-orchestrator`의 Tool Runtime이 Core NATS와 `realtime-message-service`의 Client Tool Delivery를 통해 dispatch한다.
 
 배경
 → `realtime-message-service`는 Authentication, Session, WebSocket, Permission, Device State를 이미 소유한다.
 
 이유
-→ `omni-ai-server`가 Client 연결을 직접 소유하면 세션과 권한 책임이 중복된다.
+→ `omni-ai-server`가 Client 연결을 직접 소유하면 세션과 권한 책임이 중복된다. 동시에 Tool lifecycle을 `realtime-message-service`에 두면 server tool과 client tool의 execution state가 갈라진다.
 
 Trade-off
-→ Client Tool Calling에는 `realtime-message-service` relay hop이 추가된다.
+→ Client Tool Calling에는 `ai-orchestrator / Tool Runtime`, Core NATS, `realtime-message-service` delivery hop이 추가된다. 대신 Tool lifecycle, audit, timeout, retry, result normalization, execution resume 책임을 중앙화할 수 있다.
 
 Status: Designed
 

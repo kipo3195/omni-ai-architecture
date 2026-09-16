@@ -58,19 +58,26 @@ Status: Planned
 
 목표:
 
-- Server Tool Relay
+- Tool Runtime inside `ai-orchestrator`
+- Tool Registry / Tool Lifecycle State
+- Server Tool Adapter
 - Client Tool Registry
-- Client Tool Relay
+- Client Tool Delivery
 - WebSocket Tool Request / Response
 - Permission / Capability Check
-- `triggerId / taskId / executionId / conversationId / toolCallId` correlation
+- Tool timeout / retry / cancellation
+- Tool result normalization
+- `triggerId / taskId / executionId / conversationId / toolCallId / toolAttempt / idempotencyKey` correlation
 
 검증 포인트:
 
 - Client가 `omni-ai-server`와 직접 연결되지 않는지
-- Server Tool Relay가 `auth-service` / `file-service` / `user-service` / `realtime-message-service` 경계를 지키는지
+- Tool Runtime이 server/client tool lifecycle을 일관되게 관리하는지
+- Server Tool Adapter가 `auth-service` / `file-service` / `user-service` / `realtime-message-service` 경계를 지키는지
+- Client Tool Delivery가 현재 Session Owner 기준으로 target WebSocket session을 찾는지
 - Client Tool이 최소 범위 Context만 반환하는지
 - Workflow Execution에서도 Client Integration을 사용할 수 있는지
+- LLM token stream과 execution progress가 Tool Runtime을 token-by-token 경유하지 않는지
 
 ---
 
@@ -87,7 +94,7 @@ Status: Planned
 - 여러 차례 Tool Call
 - Agent Execution Lifecycle
 - Timeout / Retry
-- gRPC 또는 Internal RPC
+- NATS-based async tool result handling
 - Agent Resume
 
 상태 후보:

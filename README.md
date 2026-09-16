@@ -91,15 +91,9 @@ Omni AI Architecture의 우선 범위는 이 WS service를 즉시 분리하는 �
 
 ```mermaid
 flowchart TD
-    A[Messenger Client] -->|WebSocket / REST| B[realtime-message-service]
-    A <-->|Client AI Request| G[ai-orchestrator]
-    A --> C[user-service]
-    A --> D[auth-service]
-    A --> E[file-service]
-
-    B --> C[user-service]
-    B --> D[auth-service]
-    B --> E[file-service]
+    A[Messenger Client] <-->|WebSocket| B[realtime-message-service]
+    A -->|Client AI Request| G[ai-orchestrator]
+    A --> C[service<br/> user / auth / file]
 
     C --> F[NATS JetStream<br/>Business Event / AI Trigger]
     B --> F
@@ -110,24 +104,24 @@ flowchart TD
     H -- Yes --> J[AiTask / executionId]
     J --> K[omni-ai-server]
 
-    K -->|Server Tool Request| G
-    G --> L[Server Tool Relay<br/>inside ai-orchestrator]
-    L <--> B
-    L <--> C
-    L <--> D
-    L <--> E
+    K <--> M[Workflow / Agent Execution]
+    K -->|Tool Request| G
+    G --> L[Tool Runtime<br/>inside ai-orchestrator]
+    L --> N[Server Tool Adapter]
+    N <--> B
+    N <--> C
 
-    K --> M[Workflow / Agent Execution]
-    K --> N[Client Tool Request]
-    N --> O[Client Tool Relay<br/>inside realtime-message-service]
+    L -->|Client Tool Dispatch| R[Core NATS]
+    R --> O[Client Tool Delivery<br/>inside realtime-message-service]
     O --> P[Client Tool]
     P --> O
-    O --> K
+    O --> R
+    R --> L
+    L -->|Tool Result / Resume| K
 
     K --> Q[Streaming / Structured Result]
-    Q --> R[Core NATS]
+    Q --> R
     R --> B
-    B --> A
 ```
 
 ### Responsibility
@@ -140,12 +134,13 @@ flowchart TD
 | **user-service** | User Profile, Organization / Class, Rule / Cache, Presence, Friend Memo, Label / Address Book |
 | **auth-service** | Authentication, Token Policy, JWT / Cookie Policy, User / Tenant Authentication Context |
 | **file-service** | File Upload / Download, Metadata, Permission, Attachment |
-| **ai-orchestrator** | Cross-service AI coordination, Trigger Policy, Context Assembly, Conversation Metadata, Server Tool Relay, Result Routing |
-| **Server Tool Relay** | `ai-orchestrator` 내부 책임. Server-side tool/context 요청을 `auth-service`, `file-service`, `user-service`, `realtime-message-service`로 중계 |
+| **ai-orchestrator** | Cross-service AI coordination, Trigger Policy, Context Assembly, Conversation Metadata, Tool Runtime, Tool Lifecycle, Result Routing |
+| **Tool Runtime** | `ai-orchestrator` 내부 책임. Tool registry, schema validation, permission, dispatch, timeout, retry, result normalization, execution resume 조정 |
+| **Server Tool Adapter** | Tool Runtime의 server-side adapter. Server-side tool/context 요청을 `auth-service`, `file-service`, `user-service`, `realtime-message-service`로 중계 |
 | **omni-ai-server** | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State |
-| **Client Tool Relay** | `realtime-message-service` 내부 책임. Client Tool 요청 전달, Session lookup, Response Correlation |
+| **Client Tool Delivery** | `realtime-message-service` 내부 책임. Client Tool 요청 전달, Session lookup, WebSocket delivery, Client result ingress |
 | **NATS JetStream** | 재처리가 필요한 Business Event / AI Trigger 전달 |
-| **Core NATS** | LLM Streaming Result를 현재 Session Owner 기준으로 low-latency routing |
+| **Core NATS** | LLM Streaming / Execution Progress / Client Tool dispatch를 현재 Session Owner 기준으로 low-latency routing |
 
 ---
 
@@ -180,10 +175,10 @@ file-service             → File, Attachment, Permission
 
 ```text
 ai-orchestrator
-→ Product-facing Metadata, Policy, Execution Correlation, Result Routing
+→ Product-facing Metadata, Policy, Execution Correlation, Tool Runtime, Result Routing
 
 omni-ai-server
-→ Prompt, Workflow, LangGraph, LLM Execution, Conversation History, Agent State
+→ Prompt, Workflow, LangGraph, LLM Execution, Tool Decision, Conversation History, Agent State
 ```
 
 `omni-ai-server`가 Messenger topology, WebSocket routing, Authentication, Product Metadata를 직접 소유하지 않도록 한다.
@@ -216,29 +211,36 @@ Client → ai-orchestrator access check → omni-ai-server → History Store →
 
 ---
 
-## Tool Relay Boundary
+## Tool Runtime Boundary
 
-Server Tool과 Client Tool의 relay 책임을 분리한다.
+Server Tool과 Client Tool은 같은 Tool lifecycle을 공유하고, 실제 실행 위치만 adapter로 분리한다.
 
 ```text
 Server Tool
 omni-ai-server
 → Server Tool이 필요하다고 판단
-→ ai-orchestrator Server Tool Relay
+→ ai-orchestrator Tool Runtime
+→ Server Tool Adapter
 → target service
-→ ai-orchestrator
+→ ai-orchestrator Tool Runtime
 → omni-ai-server
 
 Client Tool
 omni-ai-server
 → Client Tool이 필요하다고 판단
-→ realtime-message-service Client Tool Relay
+→ ai-orchestrator Tool Runtime
+→ Core NATS
+→ realtime-message-service Client Tool Delivery
 → Client Tool
-→ realtime-message-service
+→ realtime-message-service Client Tool Delivery
+→ Core NATS
+→ ai-orchestrator Tool Runtime
 → omni-ai-server
 ```
 
-`ai-orchestrator`는 Client Tool data path가 되지 않는다. Client Tool lifecycle event는 필요 시 `ai-orchestrator`에 보고할 수 있다.
+`ai-orchestrator`는 Server Tool과 Client Tool의 lifecycle owner다. `realtime-message-service`는 Client Tool의 session lookup, WebSocket delivery, result ingress를 담당하지만, `toolCallId`, timeout, retry, result validation, execution resume 판단은 Tool Runtime에서 관리한다.
+
+LLM token stream과 execution progress는 Tool lifecycle과 분리한다. 고빈도 streaming event는 `ai-orchestrator`가 token-by-token proxy하지 않고 `omni-ai-server → Core NATS → realtime-message-service → Client` 경로로 전달한다.
 
 ---
 
@@ -254,8 +256,20 @@ Execution Control
 LLM Streaming
 = omni-ai-server → Core NATS → realtime-message-service → Client
 
-Client Tool Call
-= omni-ai-server ↔ realtime-message-service Client Tool Relay
+Execution Progress
+= omni-ai-server → Core NATS → realtime-message-service → Client
+
+Tool Call Control
+= omni-ai-server → ai-orchestrator Tool Runtime
+
+Server Tool Dispatch
+= ai-orchestrator Tool Runtime → target service
+
+Client Tool Dispatch
+= ai-orchestrator Tool Runtime → Core NATS → realtime-message-service → Client
+
+Client Tool Result
+= Client → realtime-message-service → Core NATS → ai-orchestrator Tool Runtime → omni-ai-server resume
 ```
 
 공통 correlation 후보:
@@ -266,6 +280,8 @@ taskId
 executionId
 conversationId
 toolCallId
+toolAttempt
+idempotencyKey
 ```
 
 ---
@@ -278,7 +294,7 @@ toolCallId
 | [Service Boundary and Migration](docs/service-boundary-and-migration.md) | 현재 WS service 현실과 target service split / migration 방향 |
 | [Server-driven AI](docs/server-driven-ai.md) | Business Event / Client Request가 AiTask로 전환되는 흐름 |
 | [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask, Trigger, Result Routing, Stream Event |
-| [Client Integration](docs/client-integration.md) | Client Tool Relay와 Client Context |
+| [Client Integration](docs/client-integration.md) | Client Tool Delivery와 Client Context |
 | [Design Decisions](docs/design-decisions.md) | 주요 설계 결정 요약 |
 | [Roadmap](docs/roadmap.md) | Phase와 구현 순서 |
 
@@ -294,7 +310,7 @@ Phase 2
 Cross-domain Trigger / Result Routing
 
 Phase 3
-Server Tool Relay / Client Tool Relay
+Tool Runtime / Server Tool Adapter / Client Tool Delivery
 
 Phase 4
 Stateful Chatbot / Agent Runtime

@@ -109,7 +109,7 @@ Routing 판단은 한 곳에 모을 수 있지만, `ai-orchestrator`가 Streamin
 - Client explicit request와 Server trigger를 같은 delivery 원칙으로 처리할 수 있다.
 - reconnect, scale-out, instance restart 중에도 현재 WebSocket owner 기준으로 push할 수 있다.
 - `ai-orchestrator`는 실행 correlation과 routing decision에 집중하고, 최종 WebSocket delivery는 `realtime-message-service`에 남길 수 있다.
-- Client Tool Relay도 같은 `connectionId` / `roomSessionId` / `ownerInstanceId` 모델을 사용할 수 있다.
+- Client Tool Delivery도 같은 `connectionId` / `roomSessionId` / `ownerInstanceId` 모델을 사용할 수 있다.
 
 감수해야 할 점:
 

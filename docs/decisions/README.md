@@ -28,12 +28,12 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 - Session Registry와 Result Routing 방식 선택
 - Stream reconnect / resume 정책
 - Chatbot history retention 정책
-- Server Tool Relay 통신 방식과 권한 경계
+- Tool Runtime / Server Tool Adapter 통신 방식과 권한 경계
 - Label / Address Book 분리 여부
 - unread count 계산 주체
 - file-service의 AI Context 연계 범위
 - Context Store 도입 여부
-- Client Tool Relay 통신 방식 선택
+- Client Tool Delivery 통신 방식 선택
 - Agent Runtime lifecycle 변경
 - retry / timeout / duplicate 방지 정책 변경
 - 비용이나 latency에 큰 영향을 주는 구조 변경
@@ -87,3 +87,4 @@ Status: Proposed | Accepted | Superseded
 ## Index
 
 - [001. Session Registry Based AI Result Routing](001-session-registry-result-routing.md)
+- [002. Tool Runtime Ownership and Client Tool Dispatch](002-tool-runtime-ownership-client-tool-dispatch.md)

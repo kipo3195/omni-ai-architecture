@@ -43,7 +43,7 @@ omni-ai-server
 NATS JetStream trigger
 Core NATS streaming / result routing
 Conversation metadata / runtime history boundary
-Server Tool Relay / Client Tool Relay boundary
+Tool Runtime / Server Tool Adapter / Client Tool Delivery boundary
 ```
 
 즉 1차 구축에서는 현재 WS service와 연동하면서 `ai-orchestrator`와 `omni-ai-server`의 책임 경계를 먼저 검증한다.
@@ -98,4 +98,4 @@ Status: Planned
 - `file-service`의 AI Context 연계 범위
 - `auth-service`와 tenant policy 연계 방식
 - 현재 WS service에서 NATS event를 발행하는 범위
-- service split 전후 Server Tool Relay contract 호환성
+- service split 전후 Server Tool Adapter contract 호환성

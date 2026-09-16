@@ -16,8 +16,7 @@ Execution Mode
 └─ Agent Execution
 
 Context / Tool Provider
-├─ Server Tool Request via ai-orchestrator
-└─ Client Integration
+└─ Tool Request via ai-orchestrator Tool Runtime
 ```
 
 Workflow Execution과 Agent Execution 모두 필요한 경우 Client Integration을 사용할 수 있다.
@@ -50,60 +49,81 @@ Status: Designed
 
 ---
 
-## 3. Client Tool Relay
+## 3. Client Tool Delivery
 
-Client Context나 Client Tool이 필요한 경우 `realtime-message-service` 내부의 Client Tool Relay를 사용한다.
+Client Context나 Client Tool이 필요한 경우 `ai-orchestrator`의 Tool Runtime이 lifecycle을 소유하고, `realtime-message-service`는 Client Tool Delivery를 담당한다.
 
 ```text
 omni-ai-server
    ↓ Client Context / Tool 필요
-Client Tool Relay
+ai-orchestrator Tool Runtime
+   ↓ Core NATS
+Client Tool Delivery
    ↓ WebSocket
 Client Tool
    ↓
-Client Tool Relay
+Client Tool Delivery
+   ↓ Core NATS
+ai-orchestrator Tool Runtime
    ↓
-omni-ai-server
+omni-ai-server resume
 ```
 
-Client Tool Relay 책임:
+Tool Runtime 책임:
+
+- Tool registry / schema validation
+- Permission / capability policy decision
+- Tool lifecycle state
+- Tool Request dispatch
+- Tool Response correlation
+- timeout / retry / cancellation
+- result validation / normalization
+- execution resume coordination
+
+Client Tool Delivery 책임:
 
 - Client Connection 조회
-- Permission / Capability Check
-- Tool Request 전달
-- Tool Response correlation
-- timeout / disconnect 처리
+- WebSocket Tool Request 전달
+- Client Tool Response ingress
+- disconnect 감지
+- 현재 Session Owner 기준 delivery
 
-Client Tool Relay는 별도 서비스가 아니라 `realtime-message-service`의 responsibility다.
+Client Tool Delivery는 별도 서비스가 아니라 `realtime-message-service`의 responsibility다.
 
-`ai-orchestrator`가 실행을 조정하는 경우에도 Client Tool 요청의 session, permission, connection 책임은 Client Tool Relay에 남긴다. Tool result payload는 `omni-ai-server`로 반환하고, `ai-orchestrator`에는 started / completed / failed 같은 lifecycle event만 보고할 수 있다.
+`realtime-message-service`는 client session과 WebSocket delivery를 소유하지만 Tool lifecycle owner는 아니다. Tool result payload는 `ai-orchestrator`의 Tool Runtime으로 반환되고, Tool Runtime이 상태를 완료 처리한 뒤 `omni-ai-server` execution resume을 조정한다.
 
-Client Tool Relay는 요청을 보낸 instance가 아니라 Session Registry의 현재 `ownerInstanceId`를 기준으로 target WebSocket session을 찾는다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다.
+Client Tool Delivery는 요청을 보낸 instance가 아니라 Session Registry의 현재 `ownerInstanceId`를 기준으로 target WebSocket session을 찾는다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다.
 
 Status: Designed
 
 ---
 
-## 4. Server Tool Relay와의 구분
+## 4. Server Tool Adapter와 Client Tool Delivery의 구분
 
-Server-side Context나 Tool이 필요한 경우에는 Server Tool Relay를 사용한다.
+Server-side Context나 Tool이 필요한 경우에는 Tool Runtime의 Server Tool Adapter를 사용한다.
 
 ```text
 omni-ai-server
-→ ai-orchestrator
-→ Server Tool Relay
+→ ai-orchestrator Tool Runtime
+→ Server Tool Adapter
 → auth-service / file-service / user-service / realtime-message-service
 ```
 
-Client-side Context나 Tool이 필요한 경우에는 Client Tool Relay를 사용한다.
+Client-side Context나 Tool이 필요한 경우에는 Tool Runtime에서 Core NATS와 Client Tool Delivery를 통해 Client에 dispatch한다.
 
 ```text
 omni-ai-server
-→ Client Tool Relay inside realtime-message-service
+→ ai-orchestrator Tool Runtime
+→ Core NATS
+→ Client Tool Delivery inside realtime-message-service
 → Client Tool
+→ Client Tool Delivery
+→ Core NATS
+→ ai-orchestrator Tool Runtime
+→ omni-ai-server resume
 ```
 
-Server Tool Relay는 `ai-orchestrator` 내부 책임으로 service API / gRPC 호출, service capability, policy-aware access를 다룬다. Client Tool Relay는 `realtime-message-service` 내부 책임으로 WebSocket session lookup, client capability, request / response correlation을 다룬다.
+Tool Runtime은 server/client tool 공통 lifecycle을 관리한다. Server Tool Adapter는 service API / gRPC 호출, service capability, policy-aware access를 다룬다. Client Tool Delivery는 WebSocket session lookup과 client delivery / result ingress를 다룬다.
 
 Status: Designed
 
@@ -194,6 +214,8 @@ Client Tool Response는 최소한 위 식별자로 원 요청과 연결될 수 �
 
 `connectionId`와 `roomSessionId`는 client location을 찾기 위한 routing correlation이다. Tool Response와 AI Stream Result 모두 최종 push 직전에 현재 Session Registry를 확인한다.
 
+`toolCallId`, `toolAttempt`, `idempotencyKey`는 Tool Runtime에서 중복 실행과 중복 result를 방지하기 위한 correlation이다.
+
 Status: Designed
 
 ---
@@ -205,7 +227,8 @@ Workflow Execution에서도 Client Context가 필요할 수 있다.
 ```text
 Workflow Execution
 → Client Context 필요
-→ Client Tool Relay
+→ ai-orchestrator Tool Runtime
+→ Client Tool Delivery
 → Client Tool
 → Context 확보
 → Workflow 계속 실행
@@ -217,7 +240,8 @@ Agent Execution에서는 Runtime 중 Tool 사용 여부를 동적으로 결정�
 Agent Execution
 → Tool Decision
 → Client Tool 선택
-→ Client Tool Relay
+→ ai-orchestrator Tool Runtime
+→ Client Tool Delivery
 → Client Tool
 → Tool Result
 → Agent Resume
@@ -238,6 +262,8 @@ Client Tool Calling은 Client 상태에 영향을 받는다.
 - Device capability mismatch
 - 사용자가 화면을 이동한 경우
 - Partial Result 또는 Fallback
+- Duplicate Tool Result
+- Execution resume 실패
 
 Status: Planned
 

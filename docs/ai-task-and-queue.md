@@ -247,7 +247,7 @@ Registry는 다음 책임을 가진다.
 - `enterRoom` / `leaveRoom` 시 `roomSessionId`와 `connectionId` 연결
 - heartbeat / TTL 기반 stale owner 제거
 - Result push 시 현재 owner instance 조회
-- Client Tool Relay 시 현재 target connection 조회
+- Client Tool Delivery 시 현재 target connection 조회
 
 `ownerInstanceId`는 Result 전달 시점의 현재 WebSocket owner이다. `sourceInstanceId`는 Trigger를 발행하거나 Request를 처리한 instance correlation 정보일 뿐 최종 delivery source of truth가 아니다.
 
@@ -435,7 +435,7 @@ Stream Event 후보:
 START
 STATUS
 DELTA
-TOOL_CALL
+PROGRESS
 COMPLETED
 FAILED
 ```
@@ -450,6 +450,21 @@ sequence
 content
 metadata
 ```
+
+Stream Event는 Client UX를 위한 token delta 또는 execution progress event다. Tool lifecycle의 source of truth로 사용하지 않는다.
+
+Tool lifecycle event는 Tool Runtime이 관리한다.
+
+```text
+TOOL_CREATED
+TOOL_DISPATCHED
+TOOL_PROGRESS
+TOOL_COMPLETED
+TOOL_FAILED
+TOOL_TIMEOUT
+```
+
+Tool lifecycle event는 `toolCallId` 기준의 공식 상태 전이에 사용하고, Stream Event는 `executionId` 기준의 표시용 진행 상태에 사용한다. 따라서 Stream Event가 Tool lifecycle event보다 먼저 도착하거나 늦게 도착해도 execution correctness가 깨지지 않도록 설계한다.
 
 Status: Designed
 
