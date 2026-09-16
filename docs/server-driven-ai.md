@@ -13,7 +13,9 @@ Server-driven AI의 핵심은 AI Runtime이 먼저 기능을 시작하지 않는
 ```text
 Business Event 또는 Client Request
         ↓
-WebSocket Service / user-service / AI Orchestrator
+WebSocket Service / user-service
+        ↓
+AI Orchestrator
         ↓
 Business Policy / Trigger Policy
         ↓
@@ -47,14 +49,14 @@ WebSocket Service 또는 user-service
     ↓
 NATS JetStream (필요 시)
     ↓
-AI Orchestrator 또는 Service-local Handler
+AI Orchestrator
     ↓
 Feature / Permission / Cooldown / Context Policy
     ↓
 SKIP or EXECUTE
 ```
 
-Single-domain AI Use Case는 해당 Service가 직접 판단할 수 있다. 여러 Service의 상태를 조합해야 하는 Cross-domain AI Use Case는 `AI Orchestrator`가 Trigger를 수신해 Context를 조합한다.
+WebSocket Service와 user-service는 자신이 소유한 Business Event와 routing context를 제공한다. AI 실행 판단, Trigger Policy, Context Assembly, AiTask 생성은 `AI Orchestrator`에서 공통화한다.
 
 Status: Designed
 
@@ -112,22 +114,26 @@ Status: Designed
 
 ---
 
-## 4. Service / Handler / Orchestrator
+## 4. Service / Orchestrator Boundary
 
-Service-local Handler와 `AI Orchestrator`는 정책을 직접 모두 구현하는 거대한 객체가 아니라, Policy를 조합하고 실행 순서를 관리하는 Application 계층이다.
+WebSocket Service와 domain service는 connection, session, domain state의 Source of Truth를 유지한다.
 
-공통 책임:
+Service 책임:
 
 - Event / Request 해석
-- 필요한 Business State 조회
-- Policy 조합
+- Authentication / Session / Permission 1차 확인
+- connectionId / roomSessionId / routingRef correlation 제공
+- Domain state 조회 API 또는 Projection 제공
+- Business Event / AI Trigger 발행
+
+`AI Orchestrator` 책임:
+
+- Trigger Policy 판단
+- 필요한 Business State 조회 조정
+- Context Assembly
 - `SKIP / EXECUTE` 결정
 - `EXECUTE`인 경우 AiTask 생성
-
-`AI Orchestrator`의 추가 책임:
-
 - Trigger / Execution correlation
-- Cross-domain Context Assembly
 - Cooldown / duplicate trigger 방지
 - AI Execution State 관리
 - Conversation Metadata 관리
@@ -158,10 +164,13 @@ Room Enter
 WebSocket Service
   ├─ roomSessionId 생성
   ├─ connectionId / ownerInstanceId 연결
+  ↓
+AI Orchestrator
   ├─ FeatureEnabledPolicy
   ├─ CooldownPolicy
   ├─ TodayHiddenPolicy
-  └─ RecentContextPolicy
+  ├─ RecentContextPolicy
+  └─ Context Assembly
   ↓
 AiTask(CONVERSATION_START)
 ```
@@ -176,8 +185,12 @@ Client AI Request
 WebSocket Service
   ├─ Authentication / Session / Permission
   ├─ Client Context Scope 확인
-  ├─ connectionId / roomSessionId correlation
-  └─ Trigger Policy
+  └─ connectionId / roomSessionId correlation
+  ↓
+AI Orchestrator
+  ├─ Trigger Policy
+  ├─ Context Assembly
+  └─ Execution Correlation
   ↓
 AiTask(CLIENT_REQUESTED_AI)
 ```
@@ -212,7 +225,9 @@ Status: Designed
 ```text
 Label Matched
   ↓
-user-service 또는 AI Orchestrator
+user-service
+  ↓
+AI Orchestrator
   ↓
 Business Policy
   ↓
@@ -235,6 +250,10 @@ user-service
 previousOfflineAt 조회
   ↓
 awayDuration 계산
+  ↓
+AI Trigger 발행
+  ↓
+AI Orchestrator
   ↓
 Policy
   ↓

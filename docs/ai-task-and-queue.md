@@ -122,12 +122,13 @@ Omni AI Server에는 실행이 확정된 Task만 전달한다.
 Server-triggered path                  Client-explicit path
 Business Event                         Client Request
         ↓                                      ↓
-NATS JetStream (필요 시)                Permission / Context Scope / Policy
+NATS JetStream (필요 시)                Permission / Context Scope
         ↓                                      ↓
-AI Orchestrator 또는 Service Handler    Service Handler / AI Orchestrator
-        ↓                                      ↓
-SKIP / EXECUTE                         SKIP / EXECUTE
-        ↓                                      ↓
+AI Orchestrator                         AI Orchestrator
+        └──────────── Trigger Policy / Context Assembly ────────────┘
+                                      ↓
+                              SKIP / EXECUTE
+                                      ↓
         └──── EXECUTE인 경우에만 AiTask 생성 ──┘
         ↓
 Omni AI Server
@@ -280,7 +281,10 @@ roomSessionId 생성
   ↓
 roomSessionId ↔ connectionId ↔ ownerInstanceId 연결
   ↓
-Business Policy / Trigger Policy
+AI Orchestrator
+  - Business Policy / Trigger Policy
+  - Context Assembly
+  - Execution Correlation
   ↓
 AiTask 생성
   - triggerId
@@ -288,8 +292,6 @@ AiTask 생성
   - executionId
   - connectionId 또는 roomSessionId
   - routingRef
-  ↓
-AI Orchestrator
   ↓
 Omni AI Server
 ```
@@ -329,7 +331,7 @@ SCHEDULE_TRIGGERED
 MESSAGE_CREATED
 ```
 
-Server Trigger는 특정 WebSocket connection에서 시작되지 않을 수 있다. 이 경우 Trigger에는 user / tenant / room / business context를 담고, `AI Orchestrator` 또는 Service-local Handler가 Result 전달 전에 현재 target connection을 resolve한다.
+Server Trigger는 특정 WebSocket connection에서 시작되지 않을 수 있다. 이 경우 Trigger에는 user / tenant / room / business context를 담고, `AI Orchestrator`가 Result 전달 전에 현재 target connection을 resolve한다.
 
 ```text
 Business Event

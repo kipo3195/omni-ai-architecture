@@ -3,6 +3,7 @@
 > Role: 구현 순서와 진행 상태를 관리하는 문서
 > Status: Planned
 > 이 문서는 README의 Roadmap을 확장한 구현 순서이다. 완료된 구현 목록이 아니다.
+> 일부 runtime 구현 결과는 [Implementation](implementation/README.md)에 별도로 기록한다.
 
 ---
 

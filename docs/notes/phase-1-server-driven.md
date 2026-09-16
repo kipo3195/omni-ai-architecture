@@ -15,8 +15,13 @@ Phase 1의 목표는 Service Boundary와 Server-driven 기본 구조, `AI Orches
 ROOM_ENTERED
   ↓
 WebSocket Service
+  - roomSessionId / connectionId correlation
+  - AI Trigger 발행
   ↓
-Business Policy
+AI Orchestrator
+  - Business Policy
+  - Trigger Policy
+  - Context Assembly
   ↓
 AiTask(CONVERSATION_START)
   ↓
@@ -26,7 +31,7 @@ Workflow Execution
   ↓
 Structured Result
   ↓
-AI Orchestrator 또는 WebSocket Service delivery
+WebSocket Service delivery
   ↓
 Client Suggestion
 ```
@@ -58,7 +63,7 @@ Cross-domain Use Case와 NATS JetStream / Core NATS Result Routing은 Phase 2에
 
 ## Open Questions
 
-- `AI Orchestrator`를 Phase 1에서 thin boundary로 둘지, Conversation Start는 service-local handler로만 둘지
+- Conversation Start에서 AI Orchestrator가 소유할 최소 Policy / Context 범위
 - Session Registry와 Result Routing을 Phase 1에서 어느 수준까지 stub 처리할지
 - `triggerId / taskId / executionId / conversationId` correlation 필드를 Phase 1 계약에 포함할지
 
