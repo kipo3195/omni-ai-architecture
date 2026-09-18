@@ -4,6 +4,19 @@ Status: Planned
 
 ---
 
+## Implementation Areas
+
+| Area | 기록 범위 |
+| --- | --- |
+| [Spring Architecture](spring-architecture/README.md) | Spring 서비스 구성, 패키지 경계, 공통 기반 |
+| [Server Trigger](server-trigger/README.md) | Business Event 수신부터 실행 판단, Context Assembly, AiTask 생성까지 |
+| [Client Request](client-request/README.md) | Client AI 요청 수신과 공통 실행 흐름 |
+| [Tool Runtime](tool-runtime/README.md) | Tool lifecycle, 권한 확인, dispatch와 결과 연결 |
+
+각 영역에는 공통 구현 구조를 기록하고, Conversation Start와 같은 개별 기능은 적용 사례로 연결한다.
+
+---
+
 ## Scope
 
 AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현할 계획이다.

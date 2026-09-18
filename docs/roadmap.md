@@ -1,46 +1,57 @@
 # Roadmap
 
 > Role: 구현 순서와 진행 상태를 관리하는 문서
-> Status: Planned
-> 이 문서는 README의 Roadmap을 확장한 구현 순서이다. 완료된 구현 목록이 아니다.
-> 일부 runtime 구현 예정 구조는 [Implementation](implementation/README.md)에 별도로 기록한다.
+> Status: In Progress
+> 이 문서는 README의 Roadmap을 확장한 구현 순서이다. 단계의 진행 상태는 개별 항목의 구현 완료를 뜻하지 않는다.
+> 실제 코드 구조와 검증 결과는 [Implementation](implementation/README.md)에 별도로 기록한다.
 
 ---
 
-## Phase 1. Current WebSocket Service / TCP Realtime Service 연동과 Omni AI 기본 구조
+## Phase 1. Conversation Start를 통한 AI Orchestrator 기반 구축
 
-Status: Planned
+Status: In Progress
 
-목표:
+첫 번째 구현은 Conversation Start를 적용 사례로 삼아 Spring 기반 `AI Orchestrator`의 구조와 서비스 경계를 검증한다. 아래 두 작업은 구분해서 진행 상태를 기록한다.
 
-- 현재 WebSocket Service 연동
-- TCP Realtime Service 연동
-- `AI Orchestrator` boundary 정의
-- `Omni AI Server` Task Router
-- Business Policy 조합
-- `SKIP / EXECUTE` 판단
-- AiTask 생성
-- Conversation Start E2E
+### 1. Spring 기반 AI Orchestrator 구조
+
+- 독립적인 Spring Boot 서비스와 기능 중심 패키지 구조 구성
+- WebSocket Service, Omni AI Server와의 요청·응답 경계 정의
+- Server Trigger 흐름에 필요한 application / domain / infrastructure 역할 배치
+- 오류 처리와 외부 호출 등 공통 서비스 기반 정리
+
+### 2. Conversation Start 적용
+
+- `ROOM_ENTERED` 등 Conversation Start 실행 계기와 요청 계약 연결
+- 이 기능에 필요한 Policy 판단, Context Assembly, AiTask 생성 구현
+- `Omni AI Server`의 Task Router / Workflow와 연결해 추천 결과 전달
+- WebSocket Service 경로에서 Conversation Start 흐름 검증
+
+Trigger Policy, Context Assembly, AiTask 생성은 `AI Orchestrator`의 책임이지만, Phase 1에서는 Conversation Start 흐름 안에서 필요한 범위로 구현한다. 각 책임을 독립적인 공통 기능의 완료 항목으로 취급하지 않는다. 재사용 구조가 확인되면 [Server Trigger 구현 문서](implementation/ai-orchestrator/server-trigger/README.md)에 정리한다.
 
 검증 포인트:
 
-- Business Event와 AiTask 분리
-- 현재 WebSocket Service, TCP Realtime Service와 연동해도 `AI Orchestrator` / `Omni AI Server` 경계가 유지되는지
-- Single-domain Use Case가 과도하게 `AI Orchestrator`에 의존하지 않는지
-- `Omni AI Server`가 Business Rule을 소유하지 않는지
+- Spring 서비스 구조와 Conversation Start 기능 구현의 변경 범위를 구분할 수 있는지
+- Business Event와 AiTask가 분리되는지
+- WebSocket Service가 connection / delivery를, AI Orchestrator가 실행 판단을 소유하는지
+- Omni AI Server가 Business Rule 없이 확정된 작업을 실행하는지
+- Conversation Start의 입력부터 추천 결과까지 한 경로가 동작하는지
 
 ---
 
-## Phase 2. Cross-domain Trigger / Result Routing 검증
+## Phase 2. 쪽지 요약 품질과 Cross-domain Trigger / Result Routing 검증
 
 Status: Planned
 
 목표:
 
-- 상태 변경 기반 긴급 메시지 요약 또는 Label 기반 기능
+- TCP Realtime Service 경로에 Phase 1의 공통 AI 실행 계약 적용
+- `USER_RETURNED` 등 상태 변경을 계기로 한 쪽지 요약을 적용 사례로 구현
 - NATS JetStream 기반 Business Event / AI Trigger 전달
-- `AI Orchestrator`의 Context Assembly
+- `AI Orchestrator`에서 요약 대상 선정과 Context Assembly
 - Cooldown / dedup / trigger expiration 정책
+- `Omni AI Server`에서 LLM 기반 쪽지 요약 흐름과 결과 형식 구현
+- 대표 쪽지 사례로 요약 품질을 평가하고 Prompt / Context 구성을 개선
 - Core NATS 기반 Result Routing
 - `Omni AI Server → Core NATS → WebSocket Service` Streaming Data Path
 
@@ -51,6 +62,9 @@ Status: Planned
 - Reconnect / scale-out 이후 현재 Session Owner로 결과가 전달되는지
 - Structured Result가 Delivery와 잘 연결되는지
 - `AI Orchestrator`가 token stream을 proxy하지 않는지
+- 요약이 원문에 없는 사실을 만들어내거나 중요한 내용을 누락하지 않는지
+- 주요 내용과 필요한 후속 행동이 짧고 읽기 쉬운 형태로 전달되는지
+- 동일한 평가 사례에서 Prompt / Context 변경 전후의 품질을 비교할 수 있는지
 
 ---
 
@@ -165,8 +179,8 @@ maxTokens
 
 | Phase | Goal | Status |
 | --- | --- | --- |
-| Phase 1 | Current WebSocket Service / TCP Realtime Service 연동과 Omni AI 기본 구조 | Planned |
-| Phase 2 | Cross-domain Trigger / Result Routing 검증 | Planned |
+| Phase 1 | Spring 기반 AI Orchestrator 구조와 Conversation Start 적용 | In Progress |
+| Phase 2 | 쪽지 요약 품질과 Cross-domain Trigger / Result Routing 검증 | Planned |
 | Phase 3 | Client Integration | Planned |
 | Phase 4 | Stateful Chatbot / Agent Runtime | Planned |
 | Phase 5 | AI Context Projection / Cache / Observability | Planned |

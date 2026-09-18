@@ -7,9 +7,9 @@
 
 ## Purpose
 
-이 디렉터리는 Omni AI Platform의 구현 예정 구조와 구현 관점을 정리한다.
+이 디렉터리는 Omni AI Platform의 서비스별 구현 구조와 진행 상태를 정리한다.
 
-상위 Architecture 문서는 책임 경계와 실행 흐름을 설명하고, 이 디렉터리는 각 runtime이 어떤 application structure로 구현되었는지 기록한다.
+상위 Architecture 문서는 책임 경계와 목표 실행 흐름을 설명한다. 이 디렉터리는 각 runtime이 어떤 application structure와 공통 실행 방식으로 구현되었는지 기록한다. 개별 AI 기능은 해당 실행 방식의 적용 사례로 다루며, 여러 기능이 공유하는 구조를 반복해서 작성하지 않는다.
 
 ---
 
@@ -17,8 +17,8 @@
 
 | Document | Role | Status |
 | --- | --- | --- |
-| [AI Orchestrator](ai-orchestrator.md) | Spring Boot 기반 AI Orchestrator 내부 구조 | Planned |
-| [Omni AI Server](omni-ai-server.md) | Python 기반 AI Runtime 역할과 책임 | Planned |
+| [AI Orchestrator](ai-orchestrator/README.md) | Spring Boot 기반 AI Orchestrator 내부 구조 | Planned |
+| [Omni AI Server](omni-ai-server/README.md) | Python 기반 AI Runtime 역할과 책임 | Planned |
 
 ---
 

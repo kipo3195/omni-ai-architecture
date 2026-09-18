@@ -4,6 +4,17 @@ Status: Planned
 
 ---
 
+## Implementation Areas
+
+| Area | 기록 범위 |
+| --- | --- |
+| [Task Execution](task-execution/README.md) | AiTask 수신, 라우팅, Workflow / Agent 실행과 결과 생성 |
+| [Tool Calling](tool-calling/README.md) | Runtime의 Tool Decision, 호출과 실행 재개 흐름 |
+
+각 영역에는 공통 구현 구조를 기록하고, 개별 AI 기능은 적용 사례로 연결한다.
+
+---
+
 ## Scope
 
 Omni AI Server는 Python 기반 AI Runtime으로 구현할 계획이다.

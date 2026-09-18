@@ -316,8 +316,32 @@ idempotencyKey
 | [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask, Trigger, Result Routing, Stream Event |
 | [Client Integration](docs/client-integration.md) | Client Tool Delivery와 Client Context |
 | [Design Decisions](docs/design-decisions.md) | 주요 설계 결정 요약 |
-| [Implementation](docs/implementation/README.md) | 구현 예정 구조와 runtime별 책임 |
+| [Implementation](docs/implementation/README.md) | 서비스별 구현 구조와 실행 방식별 구현 기록 |
 | [Roadmap](docs/roadmap.md) | Phase와 구현 순서 |
+
+---
+
+## Implementation 기록 방식
+
+[`docs/implementation/`](docs/implementation/README.md)은 목표 아키텍처를 반복해서 설명하는 곳이 아니라, 각 서비스가 맡은 책임을 실제 코드에서 어떤 구조로 구현했는지 기록하는 영역이다. `ai-orchestrator/`와 `omni-ai-server/`로 서비스 경계를 나누고, 각 서비스 안에서는 반복해서 사용되는 실행 방식과 공통 구성 요소를 기준으로 문서를 둔다.
+
+```text
+docs/implementation/
+├── ai-orchestrator/
+│   ├── README.md                 # 서비스 책임과 구현 영역 안내
+│   ├── spring-architecture/      # Spring 애플리케이션 구조
+│   ├── server-trigger/           # Business Event 기반 AI 실행
+│   ├── client-request/           # Client 요청 기반 AI 실행
+│   └── tool-runtime/             # Tool 관리와 라우팅
+└── omni-ai-server/
+    ├── README.md                 # AI Runtime 책임과 구현 영역 안내
+    ├── task-execution/           # AiTask 수신과 Workflow / Agent 실행
+    └── tool-calling/             # Runtime의 Tool Decision과 호출 흐름
+```
+
+각 영역은 공통 요청 흐름, 책임 배치, 코드 구조, 외부 계약, 검증 결과와 현재 구현 범위를 기록한다. `Conversation Start`처럼 여러 서비스에 걸친 개별 기능은 해당 실행 방식의 **적용 사례**로 다루고, 공통 구조를 기능마다 다시 작성하지 않는다. 기능에만 해당하는 정책이나 Context, Task 유형은 공통 구조와 구분해 기록한다.
+
+상위 설계 문서는 목표 책임과 선택의 근거를 설명한다. Implementation 문서는 확인된 구현을 기준으로 작성하며, 계획된 내용과 구현·검증된 내용을 구분한다.
 
 ---
 
@@ -325,10 +349,10 @@ idempotencyKey
 
 ```text
 Phase 1
-Current WebSocket Service / TCP Realtime Service 연동과 Omni AI 기본 구조
+Spring 기반 AI Orchestrator 구조와 Conversation Start 적용
 
 Phase 2
-Cross-domain Trigger / Result Routing
+쪽지 요약 품질, TCP Realtime Service 경로 확장과 Cross-domain Trigger / Result Routing
 
 Phase 3
 Tool Runtime / Server Tool Adapter / Client Tool Delivery
