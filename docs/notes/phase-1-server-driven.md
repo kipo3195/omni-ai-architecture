@@ -1,13 +1,13 @@
 # Phase 1. Server-driven 기본 구조 Notes
 
 > Role: Phase 1 개발 중 구현 메모, 열린 질문, 회고를 기록하는 문서
-> Status: Planned
+> Status: In Progress
 
 ---
 
 ## Scope
 
-Phase 1의 목표는 Service Boundary와 Server-driven 기본 구조, `AI Orchestrator` boundary를 작게 E2E로 검증하는 것이다.
+Phase 1의 목표는 Conversation Start를 통해 Service Boundary와 Server-driven 기본 구조, `AI Orchestrator` boundary를 작게 E2E로 검증하는 것이다. 기능의 기준 문서는 [Conversation Start Use Case](../implementation/use-cases/01-conversation-start/README.md)다.
 
 대상 흐름:
 
@@ -16,7 +16,7 @@ ROOM_ENTERED
   ↓
 WebSocket Service
   - roomSessionId / connectionId correlation
-  - AI Trigger 발행
+  - Enter / Leave 전달
   ↓
 AI Orchestrator
   - Business Policy
@@ -35,6 +35,8 @@ WebSocket Service delivery
   ↓
 Client Suggestion
 ```
+
+`ROOM_LEFT`가 발생하거나 같은 사용자·방에 더 새로운 session이 만들어지면 이전 예약을 취소하고 오래된 결과를 전달하지 않는다.
 
 Cross-domain Use Case와 NATS JetStream / Core NATS Result Routing은 Phase 2에서 검증한다.
 

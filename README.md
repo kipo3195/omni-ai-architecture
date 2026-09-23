@@ -149,7 +149,7 @@ flowchart TD
 USER_RETURNED
 = 무슨 일이 발생했는가
 
-URGENT_MESSAGE_SUMMARY
+RETURNED_MESSAGE_TOPICS
 = AI가 무엇을 수행해야 하는가
 ```
 
@@ -210,7 +210,8 @@ Omni AI Server
 | Model | Trigger | Main Flow | Result |
 | --- | --- | --- | --- |
 | Server-driven AI | Server Business Event | `user-service / Realtime Service → NATS JetStream → AI Orchestrator → Omni AI Server` | Realtime Push |
-| Client-driven Command | `/요약`, `/일정`, `/번역` | `Client → AI Orchestrator → Omni AI Server` 또는 `Client → Realtime Service → AI Orchestrator → Omni AI Server` | Streaming |
+| Client-driven Command | `/요약`, `/일정`, `/번역` | `Client → AI Orchestrator → Omni AI Server` 또는 `Client → Realtime Service → AI Orchestrator → Omni AI Server` | Structured Result / Streaming |
+| Scheduled AI | 반복 Schedule 회차 | `Scheduler → AI Orchestrator → Omni AI Server` | Message / Deferred Confirmation |
 | Stateful Chatbot | `conversationId + message` | `Client → AI Orchestrator → Omni AI Server` 또는 Realtime Service 경유 | Streaming / Multi-turn |
 
 ---
@@ -314,32 +315,35 @@ idempotencyKey
 | [Service Boundary and Migration](docs/service-boundary-and-migration.md) | 현재 WebSocket Service 현실과 target service split / migration 방향 |
 | [Server-driven AI](docs/server-driven-ai.md) | Business Event / Client Request가 AiTask로 전환되는 흐름 |
 | [AiTask and Queue](docs/ai-task-and-queue.md) | AiTask, Trigger, Result Routing, Stream Event |
-| [Client Integration](docs/client-integration.md) | Client Tool Delivery와 Client Context |
+| [Client Tool Integration](docs/client-integration.md) | Client Tool Delivery와 Client Context |
 | [Design Decisions](docs/design-decisions.md) | 주요 설계 결정 요약 |
-| [Implementation](docs/implementation/README.md) | 서비스별 구현 구조와 실행 방식별 구현 기록 |
+| [Implementation](docs/implementation/README.md) | E2E Use Case와 서비스별 구현 구조 |
 | [Roadmap](docs/roadmap.md) | Phase와 구현 순서 |
 
 ---
 
 ## Implementation 기록 방식
 
-[`docs/implementation/`](docs/implementation/README.md)은 목표 아키텍처를 반복해서 설명하는 곳이 아니라, 각 서비스가 맡은 책임을 실제 코드에서 어떤 구조로 구현했는지 기록하는 영역이다. `ai-orchestrator/`와 `omni-ai-server/`로 서비스 경계를 나누고, 각 서비스 안에서는 반복해서 사용되는 실행 방식과 공통 구성 요소를 기준으로 문서를 둔다.
+[`docs/implementation/`](docs/implementation/README.md)은 E2E Use Case와 각 서비스가 맡은 책임을 실제 코드에서 어떤 구조로 구현했는지 기록하는 영역이다. `use-cases/`는 사용자 결과 중심의 Vertical Slice를, `ai-orchestrator/`와 `omni-ai-server/`는 서비스별 Horizontal Capability를 기록한다.
 
 ```text
 docs/implementation/
+├── use-cases/                    # 01~05 구현 순서와 E2E 완료 조건
 ├── ai-orchestrator/
 │   ├── README.md                 # 서비스 책임과 구현 영역 안내
 │   ├── spring-architecture/      # Spring 애플리케이션 구조
 │   ├── server-trigger/           # Business Event 기반 AI 실행
 │   ├── client-request/           # Client 요청 기반 AI 실행
+│   ├── schedule-management/      # Schedule과 실행 회차 관리
 │   └── tool-runtime/             # Tool 관리와 라우팅
 └── omni-ai-server/
     ├── README.md                 # AI Runtime 책임과 구현 영역 안내
     ├── task-execution/           # AiTask 수신과 Workflow / Agent 실행
+    ├── workflows/                # Use Case별 AI 처리 흐름
     └── tool-calling/             # Runtime의 Tool Decision과 호출 흐름
 ```
 
-각 영역은 공통 요청 흐름, 책임 배치, 코드 구조, 외부 계약, 검증 결과와 현재 구현 범위를 기록한다. `Conversation Start`처럼 여러 서비스에 걸친 개별 기능은 해당 실행 방식의 **적용 사례**로 다루고, 공통 구조를 기능마다 다시 작성하지 않는다. 기능에만 해당하는 정책이나 Context, Task 유형은 공통 구조와 구분해 기록한다.
+Use Case 문서는 여러 서비스에 걸친 기능 흐름과 상태를 관리한다. 서비스 문서는 공통 요청 흐름, 책임 배치, 코드 구조와 외부 계약을 기록한다. 기능 고유 정책과 Context는 Use Case 및 Workflow 문서에 두고, 둘 이상의 기능에서 재사용이 확인된 내용만 공통 구조로 승격한다.
 
 상위 설계 문서는 목표 책임과 선택의 근거를 설명한다. Implementation 문서는 확인된 구현을 기준으로 작성하며, 계획된 내용과 구현·검증된 내용을 구분한다.
 
@@ -349,19 +353,19 @@ docs/implementation/
 
 ```text
 Phase 1
-Spring 기반 AI Orchestrator 구조와 Conversation Start 적용
+Conversation Start End-to-End
 
 Phase 2
-쪽지 요약 품질, TCP Realtime Service 경로 확장과 Cross-domain Trigger / Result Routing
+User Returned Message Topic Digest
 
 Phase 3
-Tool Runtime / Server Tool Adapter / Client Tool Delivery
+Client LLM 기반 Scheduled Weekly Report Summary
 
 Phase 4
-Stateful Chatbot / Agent Runtime
+Server LLM 기반 Schedule Intent Parsing
 
 Phase 5
-AI Context Projection / Cache / Observability
+Tool Calling 기반 AI 기능
 
 Future
 WebSocket Service responsibility split

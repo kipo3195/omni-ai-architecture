@@ -1,6 +1,6 @@
 # AI Orchestrator Implementation
 
-Status: Planned
+Status: In Progress
 
 ---
 
@@ -11,15 +11,16 @@ Status: Planned
 | [Spring Architecture](spring-architecture/README.md) | Spring 서비스 구성, 패키지 경계, 공통 기반 |
 | [Server Trigger](server-trigger/README.md) | Business Event 수신부터 실행 판단, Context Assembly, AiTask 생성까지 |
 | [Client Request](client-request/README.md) | Client AI 요청 수신과 공통 실행 흐름 |
+| [Schedule Management](schedule-management/README.md) | Schedule 검증·저장과 실행 회차·보류 상태 관리 |
 | [Tool Runtime](tool-runtime/README.md) | Tool lifecycle, 권한 확인, dispatch와 결과 연결 |
 
-각 영역에는 공통 구현 구조를 기록하고, Conversation Start와 같은 개별 기능은 적용 사례로 연결한다.
+각 영역에는 공통 구현 구조를 기록하고, Conversation Start와 같은 개별 기능은 [Use Cases](../use-cases/README.md)에서 End-to-End 흐름으로 연결한다. 상위 상태는 Orchestrator 기반을 구축 중이라는 의미이며 모든 미래 기능의 완료 상태가 아니다.
 
 ---
 
 ## Scope
 
-AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현할 계획이다.
+AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현한다.
 
 주요 책임:
 

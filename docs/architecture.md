@@ -75,7 +75,7 @@ Status: Designed
 | Omni AI Server | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State | Designed |
 | Tool Runtime | `AI Orchestrator` 내부 책임. Tool registry, schema validation, permission, lifecycle, dispatch, timeout, retry, result normalization, execution resume 조정 | Designed |
 | Server Tool Adapter | Tool Runtime의 server-side adapter. Server-side context / tool 요청을 `auth-service`, `file-service`, `user-service`, `WebSocket Service`로 중계 | Designed |
-| Client Integration | Client Context / Client Tool을 `Omni AI Server`에 연결하는 Provider 계층 | Designed |
+| Client Tool Integration | Client Context / Client Tool을 `Omni AI Server`에 연결하는 Provider 계층 | Designed |
 | Client Tool Delivery | `WebSocket Service` 내부 책임. Client Tool 요청 전달, Session lookup, WebSocket delivery, Client result ingress | Designed |
 | Core NATS / Realtime Delivery | LLM Streaming, Execution Progress, Client Tool dispatch를 현재 Session Owner 기준으로 routing | Designed |
 
@@ -89,7 +89,7 @@ Status: Designed
 USER_RETURNED
 = 무슨 일이 발생했는가
 
-URGENT_MESSAGE_SUMMARY
+RETURNED_MESSAGE_TOPICS
 = AI가 무엇을 수행해야 하는가
 ```
 
@@ -217,7 +217,7 @@ Status: Designed
 
 ### Execution Mode와 Provider
 
-Client Integration은 Workflow / Agent와 같은 실행 방식이 아니다. Workflow와 Agent는 실행 방식이고, Client Integration은 Context나 Tool을 제공하는 계층이다.
+Client Tool Integration은 Workflow / Agent와 같은 실행 방식이 아니다. Workflow와 Agent는 실행 방식이고, Client Tool Integration은 Context나 Tool을 제공하는 계층이다.
 
 ```text
 Execution Mode
@@ -323,7 +323,8 @@ AiTask
 대표 예:
 
 - Conversation Start Recommendation
-- Urgent Message Summary
+- Returned Message Topic Digest
+- Scheduled Weekly Report Summary
 - Label 기반 분류 / 요약
 
 Status: Designed
@@ -468,7 +469,7 @@ Status: Planned
 | Conversation Metadata / Runtime State | Designed |
 | Streaming Control / Data Path | Designed |
 | NATS Trigger / Result Routing | Designed |
-| Client Integration | Designed |
+| Client Tool Integration | Designed |
 | Agent Runtime / Runtime Tool Calling | Planned |
 | Workload Queue / Worker Separation | Planned |
 | AI Context Projection / Cache / Observability | Planned |

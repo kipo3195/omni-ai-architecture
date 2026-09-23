@@ -122,5 +122,5 @@ Routing 판단은 한 곳에 모을 수 있지만, `AI Orchestrator`가 Streamin
 
 - [AiTask and Queue](../ai-task-and-queue.md)
 - [Server-driven AI](../server-driven-ai.md)
-- [Client Integration](../client-integration.md)
+- [Client Tool Integration](../client-integration.md)
 - [Design Decisions](../design-decisions.md)

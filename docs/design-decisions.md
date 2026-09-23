@@ -75,7 +75,7 @@ Status: Designed
 → 여러 Service의 상태를 조합해야 하는 AI Use Case는 `AI Orchestrator`에서 처리한다.
 
 배경
-→ Urgent Message Summary처럼 user-service, WebSocket Service, auth-service, file-service의 상태를 함께 봐야 하는 기능이 존재한다.
+→ Returned Message Topic Digest처럼 user-service와 Message / Realtime Service의 상태를 함께 봐야 하는 기능이 존재한다.
 
 이유
 → 특정 Service에 Cross-domain AI Application 책임을 몰아주지 않기 위해 Application / Coordination Boundary를 둔다.
@@ -93,7 +93,7 @@ Status: Designed
 → Business Event와 AiTask를 다른 모델로 둔다.
 
 배경
-→ `USER_RETURNED`는 발생한 일을 나타내고, `URGENT_MESSAGE_SUMMARY`는 AI가 수행할 작업을 나타낸다.
+→ `USER_RETURNED`는 발생한 일을 나타내고, `RETURNED_MESSAGE_TOPICS`는 AI가 수행할 작업을 나타낸다.
 
 이유
 → 하나의 Event에서 여러 Task 후보를 만들 수 있고, 같은 Task를 여러 Event나 Client Request 경로에서 재사용할 수 있다.
@@ -220,7 +220,7 @@ Status: Designed
 
 ---
 
-## Client Integration은 Execution Mode가 아니라 Provider이다
+## Client Tool Integration은 Execution Mode가 아니라 Provider이다
 
 결정
 → Workflow / Agent는 실행 방식이고, Server Tool / Client Tool은 Context / Tool Provider로 분리한다.
@@ -307,7 +307,7 @@ Status: Designed
 → 예측 가능한 기능은 Workflow Execution으로 먼저 다루고, Runtime Tool Calling이 필요한 기능은 Agent Runtime으로 확장한다.
 
 배경
-→ Conversation Start나 Urgent Message Summary는 Workflow로 시작하기 적합하다. 반면 여러 Tool을 순차 호출하고 다음 단계를 동적으로 결정하는 기능은 Agent Lifecycle이 필요하다.
+→ Conversation Start, Returned Message Topic Digest, Scheduled Weekly Report는 Workflow로 시작하기 적합하다. 반면 여러 Tool을 순차 호출하고 다음 단계를 동적으로 결정하는 기능은 Agent Lifecycle이 필요하다.
 
 이유
 → 초기 복잡도를 낮추면서 공통 AiTask / Trigger / Context 구조를 먼저 검증할 수 있다.

@@ -1,5 +1,7 @@
 # Server Trigger
 
+Status: In Progress
+
 Business Event가 AI 실행으로 이어지는 AI Orchestrator의 공통 구조를 기록한다.
 
 Event 수신, Trigger Policy, Context Assembly, AiTask 생성, 실행 연계의 책임과 흐름을 실제 구현 기준으로 정리한다. Conversation Start와 같은 기능은 이 구조의 적용 사례로 다루고, 기능 고유의 정책과 Context만 구분해 기록한다.
@@ -32,3 +34,20 @@ POST /api/v1/conversation-starts (userID, roomKey, chatType)
 - 공통 `AiTask` 생성이나 `triggerId / taskId / executionId` 상관관계 저장 없이 Conversation Start 전용 HTTP 계약으로 AI Server를 호출한다. 현재 `executionId`는 AI 요청의 `session_id`로 전달된다.
 - AI 결과는 메모리의 실행 객체에 저장된다. `ConversationSuggestionSender` 구현과 Realtime Service 전달은 연결되지 않았고, 결과 조회 API도 없다.
 - Repository와 Scheduler가 프로세스 내부에 있으므로 재시작·다중 인스턴스에서 실행 상태와 예약 작업을 공유하지 않는다.
+
+상세 E2E 흐름과 완료 조건은 [Conversation Start Use Case](../../use-cases/01-conversation-start/README.md)에서 관리한다.
+
+## 다음 적용 사례: Returned Message Topics
+
+사용자 상태가 `AWAY → ONLINE`으로 변경되면 자리비움 구간과 수신 쪽지를 확인하고, Topic Extraction이 필요한 경우 AiTask를 생성한다.
+
+```text
+USER_RETURNED
+  → absence period 확인
+  → 해당 기간의 수신 쪽지 조회
+  → no message / duplicate / expired 판단
+  → RETURNED_MESSAGE_TOPICS AiTask
+  → Topic Digest 결과 전달
+```
+
+이 적용 사례의 상태는 `Planned`다. 상세 범위는 [Returned Message Topics Use Case](../../use-cases/02-returned-message-topics/README.md)에서 관리한다.

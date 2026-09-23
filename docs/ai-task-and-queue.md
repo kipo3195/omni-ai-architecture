@@ -86,8 +86,20 @@ NATS JetStream은 재처리 가능성이 필요한 Business Event / AI Trigger �
 ```text
 user.status.returned
 realtime.room.entered
-message.urgent.detected
+schedule.occurrence.triggered
 ```
+
+초기 Use Case의 `taskType` 후보는 다음과 같다.
+
+```text
+CONVERSATION_START
+RETURNED_MESSAGE_TOPICS
+WEEKLY_REPORT_SUMMARY
+SCHEDULE_INTENT_PARSE
+TOOL_ASSISTED_AI
+```
+
+구현 순서와 각 Task의 완료 조건은 [End-to-End Use Cases](implementation/use-cases/README.md)에서 관리한다.
 
 Trigger Event 후보 필드:
 

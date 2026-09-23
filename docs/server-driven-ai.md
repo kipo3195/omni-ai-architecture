@@ -105,7 +105,7 @@ USER_RETURNED
     ↓
 Business Policy / Trigger Policy
     ↓
-URGENT_MESSAGE_SUMMARY
+RETURNED_MESSAGE_TOPICS
 ```
 
 Business Event와 AiTask를 분리하면 Event 증가와 AI 기능 증가를 독립적으로 다룰 수 있다.
@@ -199,7 +199,7 @@ AiTask(CLIENT_REQUESTED_AI)
 
 Status: Designed
 
-### Urgent Message Summary
+### Returned Message Topics
 
 ```text
 USER_RETURNED
@@ -210,12 +210,11 @@ NATS JetStream
   ↓
 AI Orchestrator
   ├─ AwayDurationPolicy
-  ├─ UnreadMessagePolicy
-  ├─ UrgentMessagePolicy
-  ├─ FileAccessPolicy
+  ├─ ReceivedMessagePolicy
+  ├─ DuplicatePeriodPolicy
   └─ PermissionPolicy
   ↓
-AiTask(URGENT_MESSAGE_SUMMARY)
+AiTask(RETURNED_MESSAGE_TOPICS)
 ```
 
 Status: Designed

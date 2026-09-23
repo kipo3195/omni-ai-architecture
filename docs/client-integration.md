@@ -1,14 +1,17 @@
-# Client Integration
+# Client Tool Integration
 
 > Role: Client Context / Client Tool을 Workflow 또는 Agent가 사용할 수 있는 Provider 계층으로 설명하는 문서
 > Status: Designed
-> 이 문서는 Client Integration을 Workflow / Agent와 같은 실행 방식이 아니라 Context / Tool Provider 계층으로 설명한다.
+> 이 문서에서 Client Integration은 Client Tool Integration을 의미한다. Client LLM이 ScheduleSpec을 생성하는 기능과 구분한다.
+> Client Tool Integration은 Workflow / Agent와 같은 실행 방식이 아니라 Context / Tool Provider 계층이다.
 
 ---
 
 ## 1. Position
 
-Client Integration은 별도의 AI 실행 방식이 아니다.
+Client Tool Integration은 별도의 AI 실행 방식이 아니다.
+
+Phase 3의 Client LLM 기반 Scheduled Weekly Report는 Client가 구조화된 요청을 생성하는 Use Case이며, 실행 중 Client capability를 호출하는 Client Tool Integration이 아니다.
 
 ```text
 Execution Mode
@@ -19,7 +22,7 @@ Context / Tool Provider
 └─ Tool Request via AI Orchestrator Tool Runtime
 ```
 
-Workflow Execution과 Agent Execution 모두 필요한 경우 Client Integration을 사용할 수 있다.
+Workflow Execution과 Agent Execution 모두 필요한 경우 Client Tool Integration을 사용할 수 있다.
 
 Status: Designed
 
