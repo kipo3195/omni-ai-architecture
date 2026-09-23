@@ -87,7 +87,7 @@ Omni AI Architecture의 우선 범위는 WebSocket Service를 즉시 분리하�
 
 TCP Realtime Service는 대표 다이어그램을 복잡하게 만들지 않기 위해 생략하며, 동일한 AI 실행 규격을 사용하는 channel 확장 경로로 [ADR 003](docs/decisions/003-ai-orchestrator-spring-boot-service.md)과 [Implementation](docs/implementation/README.md)에서 다룬다.
 
-서비스 분리 방향은 [Service Boundary and Migration](docs/service-boundary-and-migration.md)에서 별도로 다룬다.
+서비스 분리(user, auth, file...) 방향은 [Service Boundary and Migration](docs/service-boundary-and-migration.md)에서 별도로 다룬다.
 
 ---
 
@@ -111,14 +111,20 @@ flowchart TD
     K --> M[Workflow / Agent Execution <br/> inside Omni AI Server]
     M -->|Tool Request| G
     G --> L[Tool Runtime<br/>inside AI Orchestrator]
-    L --> N[Server Tool Adapter]
-    N <--> B
-    N <--> C
+    L -->|Server Tool Dispatch| N[Server Tool Adapter]
+    N <-->|Service request / Tool result| B
+    N <-->|Service request / Tool result| C
+    N -->|Normalized Tool Result| L
 
-    L <-->|Client Tool Dispatch / Result| B
+    L -->|Client Tool Dispatch| R[Result Router<br/>inside AI Orchestrator]
+    R --> Q[Realtime Connection Registry<br/>current owner resolve]
+    Q --> P[Core NATS<br/>owner instance subject]
+    P --> B
+    B -->|Client Tool Result| P
+    P -->|Tool Result| L
     L -->|Tool Result / Resume| M
 
-    M -->|Streaming / Structured Result| B
+    M -->|Streaming / Structured Result| R
 ```
 
 ### Responsibility
@@ -135,7 +141,7 @@ flowchart TD
 | **Tool Runtime** | `AI Orchestrator` 내부 책임. Tool registry, schema validation, permission, dispatch, timeout, retry, result normalization, execution resume 조정 |
 | **Server Tool Adapter** | Tool Runtime의 server-side adapter. Server-side tool/context 요청을 `auth-service`, `file-service`, `user-service`, `WebSocket Service`로 중계 |
 | **Omni AI Server** | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State |
-| **Client Tool Delivery** | `WebSocket Service` 내부 책임. Client Tool 요청 전달, Session lookup, WebSocket delivery, Client result ingress |
+| **Client Tool Delivery** | `WebSocket Service` 또는 `TCP Realtime Service` 내부 책임. Result Router가 선택한 instance의 local session lookup, client protocol delivery, Client Tool result ingress |
 | **NATS JetStream** | 재처리가 필요한 Business Event / AI Trigger 전달 |
 | **Result Router** | `routingRef` 해석, Realtime Connection Registry의 현재 owner 조회, owner instance subject publish. 초기에는 AI Orchestrator 내부 module이며 이후 분리 가능 |
 | **Realtime Connection Registry** | WebSocket / TCP Realtime Service가 등록한 현재 connection / room session / owner instance 조회 |
@@ -252,6 +258,8 @@ Client Tool
 Omni AI Server
 → Client Tool이 필요하다고 판단
 → AI Orchestrator Tool Runtime
+→ Result Router
+→ Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회
 → Core NATS
 → Realtime Service Client Tool Delivery
 → Client Tool
@@ -261,7 +269,7 @@ Omni AI Server
 → Omni AI Server
 ```
 
-`AI Orchestrator`는 Server Tool과 Client Tool의 lifecycle owner다. Realtime Service는 Client Tool의 session lookup, channel delivery, result ingress를 담당하지만, `toolCallId`, timeout, retry, result validation, execution resume 판단은 Tool Runtime에서 관리한다.
+`AI Orchestrator`는 Server Tool과 Client Tool의 lifecycle owner다. Result Router는 전역 routingRef를 해석해 현재 ownerInstanceId와 Core NATS subject를 선택한다. Realtime Service는 선택된 instance의 local session lookup, channel delivery, result ingress를 담당하지만, `toolCallId`, timeout, retry, result validation, execution resume 판단은 Tool Runtime에서 관리한다.
 
 LLM token stream과 execution progress는 Tool lifecycle과 분리한다. 고빈도 streaming event는 `AI Orchestrator`가 token-by-token proxy하지 않는다. 초기 Result Router가 owner를 resolve한 뒤 `Omni AI Server → Result Router → Core NATS → Realtime Service → Client` 경로로 전달하며, 독립 확장 또는 장애 격리가 필요해지면 Router만 별도 delivery plane으로 분리한다.
 

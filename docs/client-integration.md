@@ -60,7 +60,9 @@ Client Context나 Client Tool이 필요한 경우 `AI Orchestrator`의 Tool Runt
 Omni AI Server
    ↓ Client Context / Tool 필요
 AI Orchestrator Tool Runtime
-   ↓ Core NATS
+   ↓ Result Router
+   ↓ Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회
+   ↓ Core NATS owner-instance subject
 Client Tool Delivery
    ↓ WebSocket
 Client Tool
@@ -85,17 +87,17 @@ Tool Runtime 책임:
 
 Client Tool Delivery 책임:
 
-- Client Connection 조회
+- Result Router가 선택한 instance의 local Client Connection 조회
 - WebSocket Tool Request 전달
 - Client Tool Response ingress
 - disconnect 감지
-- 현재 Session Owner 기준 delivery
+- 선택된 현재 Session Owner instance에서 local delivery
 
 Client Tool Delivery는 별도 서비스가 아니라 `WebSocket Service`의 responsibility다.
 
 `WebSocket Service`는 client session과 WebSocket delivery를 소유하지만 Tool lifecycle owner는 아니다. Tool result payload는 `AI Orchestrator`의 Tool Runtime으로 반환되고, Tool Runtime이 상태를 완료 처리한 뒤 `Omni AI Server` execution resume을 조정한다.
 
-Client Tool Delivery는 요청을 보낸 instance가 아니라 Realtime Connection Registry의 현재 `ownerInstanceId`를 기준으로 target WebSocket session을 찾는다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다. 초기에는 AI Orchestrator 내부 Result Router가 owner 조회와 Core NATS subject 선택을 담당하며, Client Tool Delivery는 local session 최종 전달과 result ingress만 담당한다.
+Client Tool Delivery는 요청을 보낸 instance를 target으로 사용하지 않는다. Result Router가 Realtime Connection Registry의 현재 `ownerInstanceId`를 기준으로 target instance와 Core NATS subject를 선택한다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다. 초기에는 AI Orchestrator 내부 Result Router가 owner 조회와 Core NATS subject 선택을 담당하며, Client Tool Delivery는 선택된 instance의 local session 최종 전달과 result ingress만 담당한다.
 
 Status: Designed
 
@@ -128,7 +130,7 @@ Omni AI Server
 → Omni AI Server resume
 ```
 
-Tool Runtime은 server/client tool 공통 lifecycle을 관리한다. Server Tool Adapter는 service API / gRPC 호출, service capability, policy-aware access를 다룬다. Client Tool Delivery는 WebSocket session lookup과 client delivery / result ingress를 다룬다.
+Tool Runtime은 server/client tool 공통 lifecycle을 관리한다. Server Tool Adapter는 service API / gRPC 호출, service capability, policy-aware access를 다룬다. Result Router는 전역 routing resolution을, Client Tool Delivery는 선택된 instance의 local session lookup과 client delivery / result ingress를 다룬다.
 
 Status: Designed
 
@@ -233,6 +235,7 @@ Workflow Execution에서도 Client Context가 필요할 수 있다.
 Workflow Execution
 → Client Context 필요
 → AI Orchestrator Tool Runtime
+→ Result Router / Realtime Connection Registry 조회
 → Client Tool Delivery
 → Client Tool
 → Context 확보
@@ -246,6 +249,7 @@ Agent Execution
 → Tool Decision
 → Client Tool 선택
 → AI Orchestrator Tool Runtime
+→ Result Router / Realtime Connection Registry 조회
 → Client Tool Delivery
 → Client Tool
 → Tool Result
@@ -280,16 +284,17 @@ LLM Streaming Result는 `AI Orchestrator`가 token-by-token proxy하지 않는�
 
 ```text
 Omni AI Server
-→ Core NATS
-→ WebSocket Service
+→ Result Router
+→ Realtime Connection Registry 조회
+→ Core NATS owner-instance subject
+→ Realtime Service
 → Client WebSocket
 ```
 
 `WebSocket Service` 책임:
 
 - Core NATS AI Stream 수신
-- Session Registry 또는 local session map을 통한 Target WebSocket Session 탐색
-- 현재 ownerInstanceId가 자신인지 확인
+- Result Router가 선택한 instance에서 local session map으로 Target WebSocket Session 확인
 - Messenger Client WebSocket Protocol로 변환
 - Client에 Stream Push
 

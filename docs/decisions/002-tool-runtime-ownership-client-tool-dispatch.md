@@ -35,18 +35,18 @@ Server Tool Dispatch
 = AI Orchestrator Tool Runtime → Server Tool Adapter → target service
 
 Client Tool Dispatch
-= AI Orchestrator Tool Runtime → Core NATS → WebSocket Service → Client
+= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회 → Core NATS owner-instance subject → Realtime Service → local connection → Client
 
 Client Tool Result
-= Client → WebSocket Service → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
+= Client → Realtime Service → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
 ```
 
-`WebSocket Service`는 client session lookup, WebSocket delivery, client result ingress를 담당한다. Client Tool lifecycle의 source of truth는 아니다.
+초기에는 `AI Orchestrator` 내부 모듈인 `Result Router`가 전역 routingRef를 해석하고 Realtime Connection Registry에서 현재 ownerInstanceId를 조회해 Core NATS owner-instance subject를 선택한다. `WebSocket Service` 또는 `TCP Realtime Service`는 선택된 instance에서 local session lookup, client protocol delivery, client result ingress를 담당한다. Realtime Service는 Client Tool lifecycle의 source of truth가 아니다.
 
 LLM token stream과 execution progress stream은 Tool Runtime을 token-by-token 경유하지 않는다.
 
 ```text
-Omni AI Server → Core NATS → WebSocket Service → Client
+Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS owner-instance subject → Realtime Service → Client
 ```
 
 ## Alternatives

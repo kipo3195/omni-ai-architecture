@@ -52,7 +52,10 @@ flowchart TD
     V <--> D
     V <--> E
     V <--> B
-    O <-->|Client Tool Dispatch / Result| B
+    O -->|Client Tool Dispatch| R
+    B -->|Client Tool Result| P
+    T -->|Client Tool Result| P
+    P -->|Tool Result| O
     O -->|Tool Result / Resume| N
 
     K -->|Streaming / Structured Result| R[Result Router<br/>initially inside AI Orchestrator]
@@ -84,7 +87,7 @@ Status: Designed
 | Tool Runtime | `AI Orchestrator` 내부 책임. Tool registry, schema validation, permission, lifecycle, dispatch, timeout, retry, result normalization, execution resume 조정 | Designed |
 | Server Tool Adapter | Tool Runtime의 server-side adapter. Server-side context / tool 요청을 `auth-service`, `file-service`, `user-service`, `WebSocket Service`로 중계 | Designed |
 | Client Tool Integration | Client Context / Client Tool을 `Omni AI Server`에 연결하는 Provider 계층 | Designed |
-| Client Tool Delivery | `WebSocket Service` 내부 책임. Client Tool 요청 전달, Session lookup, WebSocket delivery, Client result ingress | Designed |
+| Client Tool Delivery | `WebSocket Service` 또는 `TCP Realtime Service` 내부 책임. Result Router가 선택한 instance의 local session lookup, client protocol delivery, Client Tool result ingress | Designed |
 | Result Router | `routingRef` 해석, Realtime Connection Registry의 현재 owner 조회, owner instance subject publish. 초기에는 AI Orchestrator 내부 module이며 이후 분리 가능 | Designed |
 | Realtime Connection Registry | Realtime Service가 등록한 현재 connection / room session / owner instance 조회. WebSocket / TCP session 자체를 소유하지 않음 | Designed |
 | Core NATS / Realtime Delivery | Result Router가 선택한 owner instance로 LLM Streaming, Execution Progress, Client Tool dispatch를 저지연 전달 | Designed |
@@ -251,7 +254,7 @@ Server Tool Execution
 = AI Orchestrator Tool Runtime → Server Tool Adapter → target service
 
 Client Tool Execution
-= AI Orchestrator Tool Runtime → Core NATS → WebSocket Service Client Tool Delivery → Client
+= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회 → Core NATS owner-instance subject → Realtime Service Client Tool Delivery → local connection → Client
 ```
 
 Status: Designed
@@ -416,7 +419,7 @@ FAILED
 
 `Result Router`는 `routingRef`로 Realtime Connection Registry를 조회하고, 현재 `ownerInstanceId`의 Core NATS subject를 선택한다. Core NATS는 registry lookup을 수행하지 않고 선택된 subject의 event만 전달한다. `WebSocket Service`와 `TCP Realtime Service`는 해당 event를 각자의 client protocol로 변환해 자신이 소유한 local connection에 전달한다.
 
-Client Tool request / response는 Tool Runtime을 data path로 사용한다. `Omni AI Server`가 tool call을 결정하면 `AI Orchestrator`의 Tool Runtime이 lifecycle을 생성하고, `WebSocket Service`의 Client Tool Delivery가 target WebSocket session으로 전달한 뒤 결과를 Tool Runtime으로 반환한다.
+Client Tool request / response는 Tool Runtime을 data path로 사용한다. `Omni AI Server`가 tool call을 결정하면 `AI Orchestrator`의 Tool Runtime이 lifecycle과 routingRef를 생성한다. Result Router가 Realtime Connection Registry에서 현재 ownerInstanceId를 조회해 Core NATS owner-instance subject를 선택하고, 선택된 Realtime Service의 Client Tool Delivery가 local connection으로 전달한 뒤 결과를 Tool Runtime으로 반환한다.
 
 LLM token stream과 execution progress는 Tool Runtime을 통과하지 않는다. Tool Runtime은 `tool_started`, `tool_progress`, `tool_completed`, `tool_failed`, `tool_timeout` 같은 Tool lifecycle event를 관리한다. 초기에는 AI Orchestrator 내부 Result Router가 routing만 수행하며, 고빈도 token stream을 Client까지 proxy하지 않는다. 필요해지면 동일한 `ResultEvent` 계약을 유지한 채 Result Router를 독립 Realtime Delivery Plane으로 분리한다.
 
