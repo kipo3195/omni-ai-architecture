@@ -1,4 +1,4 @@
-# 003. AI Orchestrator as a Spring Boot Application Service
+# 003. AI Orchestrator as an Application Service
 
 Status: Accepted
 
