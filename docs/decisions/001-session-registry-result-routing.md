@@ -34,13 +34,15 @@ Scale-out, scale-in, instance restart, reconnect, session migration, multi-devic
 
 AI Result delivery는 Trigger source instance가 아니라 Session Registry의 현재 owner 기준으로 routing한다.
 
-WebSocket 연결 시 `WebSocket Service`는 Connection Registry에 현재 연결을 등록한다.
+WebSocket / TCP 연결 시 각 Realtime Service는 Realtime Connection Registry에 현재 연결을 등록한다.
 
 ```text
 connectionId
+channelType
 tenantId
 userId
 deviceId (필요 시)
+ownerServiceType
 ownerInstanceId
 connectedAt
 lastSeenAt
@@ -62,6 +64,18 @@ expiresAt
 
 AI 실행은 `triggerId` / `taskId` / `executionId`로 처리한다. Client delivery는 `connectionId` / `roomSessionId` / `routingRef`를 통해 현재 target을 resolve한다.
 
+초기 구현에서 Result Router는 별도 배포 서비스가 아니라 `AI Orchestrator` 내부 모듈로 둔다. 이 모듈의 책임은 `routingRef`를 해석하고 Session Registry에서 현재 owner를 조회한 뒤, 해당 instance subject로 Core NATS event를 발행하는 데까지다. WebSocket 또는 TCP session을 소유하거나 Client까지 stream을 proxy하지 않는다.
+
+고빈도 LLM streaming으로 독립적인 확장 또는 장애 격리가 필요해지거나, WebSocket / TCP 외 delivery adapter가 늘어나면 같은 계약을 유지한 채 `Realtime Delivery / Result Router`를 별도 배포 단위로 분리할 수 있다. 분리 전후 공통 입력 계약은 다음과 같다.
+
+```text
+ResultEvent
+  executionId
+  routingRef
+  eventType
+  payload
+```
+
 Result push 흐름:
 
 ```text
@@ -71,16 +85,16 @@ AI stream / result
   ↓
 AI Orchestrator 또는 Result Router
   ↓
-Session Registry에서 현재 ownerInstanceId 확인
+Realtime Connection Registry에서 현재 ownerInstanceId 확인
   ↓
 Core NATS instance subject로 publish
   ↓
-해당 WebSocket Service instance
+해당 Realtime Service instance
   ↓
-local WebSocket session으로 최종 push
+local realtime connection으로 최종 push
 ```
 
-`sourceInstanceId`는 correlation 정보로만 사용한다. 최종 delivery source of truth로 사용하지 않는다.
+`sourceInstanceId`는 correlation 정보로만 사용한다. 최종 delivery source of truth로 사용하지 않는다. Connection Registry는 WebSocket 전용이 아니라 WebSocket / TCP Realtime Service가 각자 등록하는 Realtime Connection Registry로 확장한다. 각 Realtime Service는 자신의 local connection을 소유하고 최종 push를 수행한다.
 
 ## Alternatives
 

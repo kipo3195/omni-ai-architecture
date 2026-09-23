@@ -95,7 +95,7 @@ Client Tool Delivery는 별도 서비스가 아니라 `WebSocket Service`의 res
 
 `WebSocket Service`는 client session과 WebSocket delivery를 소유하지만 Tool lifecycle owner는 아니다. Tool result payload는 `AI Orchestrator`의 Tool Runtime으로 반환되고, Tool Runtime이 상태를 완료 처리한 뒤 `Omni AI Server` execution resume을 조정한다.
 
-Client Tool Delivery는 요청을 보낸 instance가 아니라 Session Registry의 현재 `ownerInstanceId`를 기준으로 target WebSocket session을 찾는다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다.
+Client Tool Delivery는 요청을 보낸 instance가 아니라 Realtime Connection Registry의 현재 `ownerInstanceId`를 기준으로 target WebSocket session을 찾는다. Agent 실행 중 reconnect나 room 이동이 발생할 수 있으므로 `connectionId`, `roomSessionId`, `toolCallId`, `executionId`를 함께 사용해 현재 client location과 tool response를 연결한다. 초기에는 AI Orchestrator 내부 Result Router가 owner 조회와 Core NATS subject 선택을 담당하며, Client Tool Delivery는 local session 최종 전달과 result ingress만 담당한다.
 
 Status: Designed
 
@@ -117,6 +117,8 @@ Client-side Context나 Tool이 필요한 경우에는 Tool Runtime에서 Core NA
 ```text
 Omni AI Server
 → AI Orchestrator Tool Runtime
+→ Result Router
+→ Realtime Connection Registry 조회
 → Core NATS
 → Client Tool Delivery inside WebSocket Service
 → Client Tool

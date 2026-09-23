@@ -48,6 +48,7 @@ AI Orchestrator
 Omni AI Server
 NATS JetStream trigger
 Core NATS streaming / result routing
+Result Router inside AI Orchestrator
 Conversation metadata / runtime history boundary
 Tool Runtime / Server Tool Adapter / Client Tool Delivery boundary
 ```
@@ -96,6 +97,9 @@ Status: Target
 - `AI Orchestrator`가 특정 future service split에 과도하게 의존하지 않도록 한다.
 - Target service name은 문서에서 경계 설명용으로 사용하되, 현재 배포 구조와 혼동하지 않는다.
 - WebSocket Service 내부 기능이 분리되더라도 `AI Orchestrator`와 `Omni AI Server`의 계약이 크게 흔들리지 않게 한다.
+- 초기에는 `Result Router`를 `AI Orchestrator` 내부 module로 배치한다. 이 module은 현재 session owner를 resolve하고 owner instance subject로 발행할 뿐, session이나 client stream을 소유하지 않는다.
+- 고빈도 streaming의 독립 확장, 장애 격리, channel delivery adapter 증가가 필요해지면 동일한 `ResultEvent` 계약으로 `Realtime Delivery / Result Router`를 별도 배포 단위로 분리한다.
+- WebSocket Service와 TCP Realtime Service는 계속 각자의 connection, session, local final delivery를 소유한다.
 
 Status: Planned
 

@@ -1,7 +1,6 @@
 # Architecture Decision Records
 
 > Role: 되돌리기 어렵거나 이후 구현 방향에 영향을 주는 개별 설계 결정을 기록하는 디렉터리
-> Status: Planned
 
 ---
 
@@ -46,9 +45,10 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 ## File Naming
 
 ```text
-001-ai-task-model.md
-002-queue-selection.md
-003-client-tool-relay.md
+001-session-registry-result-routing.md
+002-tool-runtime-ownership-client-tool-dispatch.md
+003-ai-orchestrator-spring-boot-service.md
+...
 ```
 
 번호는 작성 순서를 나타낸다. 제목은 결정의 주제를 짧게 표현한다.

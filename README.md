@@ -131,13 +131,15 @@ flowchart TD
 | **user-service** | User Profile, Organization / Class, Rule / Cache, Presence, Friend Memo, Label / Address Book |
 | **auth-service** | Authentication, Token Policy, JWT / Cookie Policy, User / Tenant Authentication Context |
 | **file-service** | File Upload / Download, Metadata, Permission, Attachment |
-| **AI Orchestrator** | Cross-service AI coordination, Trigger Policy, Context Assembly, Conversation Metadata, Tool Runtime, Tool Lifecycle, Result Routing |
+| **AI Orchestrator** | Cross-service AI coordination, Trigger Policy, Context Assembly, Conversation Metadata, Tool Runtime, Tool Lifecycle. 초기에는 Result Router module을 내부 배치 |
 | **Tool Runtime** | `AI Orchestrator` 내부 책임. Tool registry, schema validation, permission, dispatch, timeout, retry, result normalization, execution resume 조정 |
 | **Server Tool Adapter** | Tool Runtime의 server-side adapter. Server-side tool/context 요청을 `auth-service`, `file-service`, `user-service`, `WebSocket Service`로 중계 |
 | **Omni AI Server** | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State |
 | **Client Tool Delivery** | `WebSocket Service` 내부 책임. Client Tool 요청 전달, Session lookup, WebSocket delivery, Client result ingress |
 | **NATS JetStream** | 재처리가 필요한 Business Event / AI Trigger 전달 |
-| **Core NATS** | LLM Streaming / Execution Progress / Client Tool dispatch를 현재 Session Owner 기준으로 low-latency routing |
+| **Result Router** | `routingRef` 해석, Realtime Connection Registry의 현재 owner 조회, owner instance subject publish. 초기에는 AI Orchestrator 내부 module이며 이후 분리 가능 |
+| **Realtime Connection Registry** | WebSocket / TCP Realtime Service가 등록한 현재 connection / room session / owner instance 조회 |
+| **Core NATS** | Result Router가 선택한 owner instance로 LLM Streaming / Execution Progress / Client Tool dispatch를 저지연 전달 |
 
 ---
 
@@ -167,7 +169,7 @@ auth-service          → Authentication, Token Policy
 file-service          → File, Attachment, Permission
 ```
 
-`AI Orchestrator`는 Domain State나 channel connection을 소유하지 않는다. 여러 Service의 상태를 조합해야 하는 AI Use Case와 공통 실행 규격만 조정한다.
+`AI Orchestrator`는 Domain State나 channel connection을 소유하지 않는다. 여러 Service의 상태를 조합해야 하는 AI Use Case와 공통 실행 규격을 조정한다. 초기 Result Router는 내부 module로 둘 수 있지만, 현재 owner 조회와 Core NATS subject 선택만 수행하며 session이나 Client stream을 소유하지 않는다.
 
 ### 3. Channel별 연결 책임과 AI 실행 규격 분리
 
@@ -261,7 +263,7 @@ Omni AI Server
 
 `AI Orchestrator`는 Server Tool과 Client Tool의 lifecycle owner다. Realtime Service는 Client Tool의 session lookup, channel delivery, result ingress를 담당하지만, `toolCallId`, timeout, retry, result validation, execution resume 판단은 Tool Runtime에서 관리한다.
 
-LLM token stream과 execution progress는 Tool lifecycle과 분리한다. 고빈도 streaming event는 `AI Orchestrator`가 token-by-token proxy하지 않고 `Omni AI Server → Core NATS → Realtime Service → Client` 경로로 전달한다.
+LLM token stream과 execution progress는 Tool lifecycle과 분리한다. 고빈도 streaming event는 `AI Orchestrator`가 token-by-token proxy하지 않는다. 초기 Result Router가 owner를 resolve한 뒤 `Omni AI Server → Result Router → Core NATS → Realtime Service → Client` 경로로 전달하며, 독립 확장 또는 장애 격리가 필요해지면 Router만 별도 delivery plane으로 분리한다.
 
 ---
 
@@ -275,10 +277,10 @@ Execution Control
 = Client / Realtime Service → AI Orchestrator → Omni AI Server
 
 LLM Streaming
-= Omni AI Server → Core NATS → Realtime Service → Client
+= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
 
 Execution Progress
-= Omni AI Server → Core NATS → Realtime Service → Client
+= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
 
 Tool Call Control
 = Omni AI Server → AI Orchestrator Tool Runtime
@@ -287,7 +289,7 @@ Server Tool Dispatch
 = AI Orchestrator Tool Runtime → target service
 
 Client Tool Dispatch
-= AI Orchestrator Tool Runtime → Core NATS → Realtime Service → Client
+= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
 
 Client Tool Result
 = Client → Realtime Service → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume

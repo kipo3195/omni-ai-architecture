@@ -168,7 +168,7 @@ Status: Designed
 → AI 결과는 영속성보다 현재 연결된 사용자에게 빠르게 전달하는 것이 중요한 경우가 많다.
 
 이유
-→ Reconnect, scale-out, instance restart가 발생할 수 있으므로 Result 전달 시점에 현재 Session Owner를 확인하고 대상 `WebSocket Service` instance로 low-latency routing한다.
+→ Reconnect, scale-out, instance restart가 발생할 수 있으므로 Result 전달 시점에 Result Router가 현재 Session Owner를 확인하고 대상 Realtime Service instance로 low-latency routing한다. Core NATS는 선택된 instance subject로 event를 전달한다.
 
 Trade-off
 → Session Registry 또는 현재 Session Owner 조회 경로가 필요하다.
@@ -182,9 +182,9 @@ Status: Designed
 결정
 → Client explicit request나 Server trigger를 처리한 instance를 최종 delivery target으로 사용하지 않는다.
 
-→ WebSocket 연결 시 Connection Registry에 `connectionId`와 현재 `ownerInstanceId`를 등록하고, `enterRoom` 시 `roomSessionId`를 생성해 `connectionId` / `ownerInstanceId`와 연결한다.
+→ WebSocket / TCP Realtime Service는 Realtime Connection Registry에 `connectionId`와 현재 `ownerInstanceId`를 등록하고, `enterRoom` 시 `roomSessionId`를 생성해 `connectionId` / `ownerInstanceId`와 연결한다.
 
-→ AI Result push 시점에는 `triggerId` / `taskId` / `executionId`로 실행 상태를 확인하고, `connectionId` / `roomSessionId` / `routingRef`를 통해 Session Registry에서 현재 `ownerInstanceId`를 resolve한 뒤 해당 `WebSocket Service` instance로만 전달한다.
+→ 초기에는 AI Orchestrator 내부 Result Router가 AI Result push 시점에 `triggerId` / `taskId` / `executionId`로 실행 상태를 확인하고, `connectionId` / `roomSessionId` / `routingRef`로 현재 `ownerInstanceId`를 resolve한 뒤 해당 Realtime Service instance로만 전달한다. 이 module은 session을 소유하거나 Client까지 stream을 proxy하지 않는다.
 
 배경
 → `enterRoom` API를 처리한 instance와 실제 WebSocket이 붙어 있는 instance가 다를 수 있다. AI 처리 중 reconnect, scale-out, scale-in, instance restart, session migration도 발생할 수 있다.
@@ -205,7 +205,7 @@ Status: Designed
 ## AI Orchestrator는 Streaming Data Plane이 아니다
 
 결정
-→ LLM Stream을 `AI Orchestrator`가 token-by-token proxy하지 않고, `Omni AI Server → Core NATS → WebSocket Service → Client` 경로로 전달한다.
+→ LLM Stream을 AI Orchestrator가 token-by-token proxy하지 않는다. 초기 Result Router가 owner를 resolve한 뒤 `Omni AI Server → Result Router → Core NATS → Realtime Service → Client` 경로로 전달하며, 필요해지면 Router만 독립 delivery plane으로 분리한다.
 
 배경
 → `AI Orchestrator`는 executionId, conversationId, workflow, policy, correlation, routing context를 관리하는 control path 역할을 가진다.

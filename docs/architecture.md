@@ -21,7 +21,9 @@ Target 구조에서는 각 Service가 자신의 Business State와 Policy에 대�
 ```mermaid
 flowchart TD
     A[Messenger Client] -->|WebSocket / REST| B[WebSocket Service<br/>WebSocket / Chat / Note / Alert]
-    A <-->|Client AI Request| G[AI Orchestrator<br/>Policy / Context / Correlation / Metadata]
+    A -->|TCP| T[TCP Realtime Service<br/>TCP Connection / Realtime Delivery]
+    B -->|Client AI Request| G[AI Orchestrator<br/>Policy / Context / Correlation / Metadata]
+    T -->|Client AI Request| G
     A --> C[user-service<br/>User / Presence / Rule / Label]
     A --> D[auth-service<br/>Auth / Token Policy]
     A --> E[file-service<br/>File / Attachment / Permission]
@@ -53,7 +55,13 @@ flowchart TD
     O <-->|Client Tool Dispatch / Result| B
     O -->|Tool Result / Resume| N
 
-    K -->|Streaming / Structured Result| B
+    K -->|Streaming / Structured Result| R[Result Router<br/>initially inside AI Orchestrator]
+    R --> Q[Realtime Connection Registry<br/>current owner resolve]
+    R -->|owner instance subject| P[Core NATS]
+    P --> B
+    P --> T
+    B --> A
+    T --> A
 ```
 
 Status: Designed
@@ -71,13 +79,15 @@ Status: Designed
 | auth-service | Authentication, Token Policy, JWT / Cookie Policy, User / Tenant Authentication Context | Designed |
 | file-service | File Upload / Download, Metadata, Permission, Attachment | Designed |
 | NATS JetStream | 재처리가 필요한 Business Event / AI Trigger 전달, durable consumer, ACK / retry | Designed |
-| AI Orchestrator | Cross-domain AI Use Case 조정, Trigger Policy, Context Assembly, Cooldown / Dedup, Execution Correlation, Conversation Metadata, Tool Runtime, Result Routing | Designed |
+| AI Orchestrator | Cross-domain AI Use Case 조정, Trigger Policy, Context Assembly, Cooldown / Dedup, Execution Correlation, Conversation Metadata, Tool Runtime. 초기에는 Result Router module을 내부 배치 | Designed |
 | Omni AI Server | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State | Designed |
 | Tool Runtime | `AI Orchestrator` 내부 책임. Tool registry, schema validation, permission, lifecycle, dispatch, timeout, retry, result normalization, execution resume 조정 | Designed |
 | Server Tool Adapter | Tool Runtime의 server-side adapter. Server-side context / tool 요청을 `auth-service`, `file-service`, `user-service`, `WebSocket Service`로 중계 | Designed |
 | Client Tool Integration | Client Context / Client Tool을 `Omni AI Server`에 연결하는 Provider 계층 | Designed |
 | Client Tool Delivery | `WebSocket Service` 내부 책임. Client Tool 요청 전달, Session lookup, WebSocket delivery, Client result ingress | Designed |
-| Core NATS / Realtime Delivery | LLM Streaming, Execution Progress, Client Tool dispatch를 현재 Session Owner 기준으로 routing | Designed |
+| Result Router | `routingRef` 해석, Realtime Connection Registry의 현재 owner 조회, owner instance subject publish. 초기에는 AI Orchestrator 내부 module이며 이후 분리 가능 | Designed |
+| Realtime Connection Registry | Realtime Service가 등록한 현재 connection / room session / owner instance 조회. WebSocket / TCP session 자체를 소유하지 않음 | Designed |
+| Core NATS / Realtime Delivery | Result Router가 선택한 owner instance로 LLM Streaming, Execution Progress, Client Tool dispatch를 저지연 전달 | Designed |
 
 ---
 
@@ -358,13 +368,13 @@ Business Event / AI Trigger
 = NATS JetStream
 
 Control Path
-= Client / WebSocket Service → AI Orchestrator → Omni AI Server
+= Client / Realtime Service → AI Orchestrator → Omni AI Server
 
 Streaming Data Path
-= Omni AI Server → Core NATS → WebSocket Service → Client
+= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
 
 Execution Progress Path
-= Omni AI Server → Core NATS → WebSocket Service → Client
+= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
 
 Tool Control Path
 = Omni AI Server → AI Orchestrator Tool Runtime
@@ -373,10 +383,10 @@ Server Tool Dispatch
 = AI Orchestrator Tool Runtime → target service
 
 Client Tool Dispatch
-= AI Orchestrator Tool Runtime → Core NATS → WebSocket Service → Client
+= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
 
 Client Tool Result
-= Client → WebSocket Service → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
+= Client → Realtime Service → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
 ```
 
 통일하는 대상은 Transport가 아니라 `triggerId`, `taskId`, `executionId`, `conversationId`, `connectionId`, `roomSessionId`, `toolCallId`, `toolAttempt`, `idempotencyKey` 같은 실행 계약과 식별자이다.
@@ -404,11 +414,11 @@ COMPLETED
 FAILED
 ```
 
-`WebSocket Service`는 Core NATS에서 받은 stream event를 Messenger Client WebSocket Protocol로 변환하여 전달한다.
+`Result Router`는 `routingRef`로 Realtime Connection Registry를 조회하고, 현재 `ownerInstanceId`의 Core NATS subject를 선택한다. Core NATS는 registry lookup을 수행하지 않고 선택된 subject의 event만 전달한다. `WebSocket Service`와 `TCP Realtime Service`는 해당 event를 각자의 client protocol로 변환해 자신이 소유한 local connection에 전달한다.
 
 Client Tool request / response는 Tool Runtime을 data path로 사용한다. `Omni AI Server`가 tool call을 결정하면 `AI Orchestrator`의 Tool Runtime이 lifecycle을 생성하고, `WebSocket Service`의 Client Tool Delivery가 target WebSocket session으로 전달한 뒤 결과를 Tool Runtime으로 반환한다.
 
-LLM token stream과 execution progress는 Tool Runtime을 통과하지 않는다. Tool Runtime은 `tool_started`, `tool_progress`, `tool_completed`, `tool_failed`, `tool_timeout` 같은 Tool lifecycle event를 관리하고, 고빈도 token stream은 `Omni AI Server → Core NATS → WebSocket Service → Client` 경로로 전달한다.
+LLM token stream과 execution progress는 Tool Runtime을 통과하지 않는다. Tool Runtime은 `tool_started`, `tool_progress`, `tool_completed`, `tool_failed`, `tool_timeout` 같은 Tool lifecycle event를 관리한다. 초기에는 AI Orchestrator 내부 Result Router가 routing만 수행하며, 고빈도 token stream을 Client까지 proxy하지 않는다. 필요해지면 동일한 `ResultEvent` 계약을 유지한 채 Result Router를 독립 Realtime Delivery Plane으로 분리한다.
 
 Status: Designed
 
@@ -428,7 +438,7 @@ Instance Restart
 Session Migration
 ```
 
-최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다. `enterRoom`이나 Client explicit request를 처리한 instance는 correlation 정보로만 보고, `connectionId` / `roomSessionId`를 통해 Session Registry에서 현재 `ownerInstanceId`를 resolve한다.
+최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다. `enterRoom`이나 Client explicit request를 처리한 instance는 correlation 정보로만 보고, `connectionId` / `roomSessionId`를 통해 Realtime Connection Registry에서 현재 `ownerInstanceId`를 resolve한다. Result Router는 owner instance subject를 선택할 뿐 session을 소유하지 않으며, Realtime Service가 local connection으로 최종 push한다.
 
 Status: Designed
 

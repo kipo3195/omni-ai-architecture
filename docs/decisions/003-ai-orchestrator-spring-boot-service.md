@@ -32,6 +32,10 @@ AI Orchestrator는 WebSocket Client와 TCP Client 모두에 대해 동일한 AI 
 
 Omni AI Server는 channel 종류를 알지 않고, 실행이 확정된 AiTask를 처리하는 Python AI Runtime으로 유지한다.
 
+초기 Result Router는 `AI Orchestrator` 내부의 application module로 둔다. 이 module은 `routingRef`로 현재 Realtime Connection Registry owner를 resolve하고 Core NATS owner instance subject를 선택한다. Realtime session의 소유나 Client까지의 token stream proxy는 이 module의 책임이 아니며, 해당 책임은 WebSocket Service와 TCP Realtime Service에 남긴다.
+
+고빈도 streaming의 독립적인 확장 또는 장애 격리가 필요해지면 Result Router는 같은 `ResultEvent` 계약을 유지한 채 별도 `Realtime Delivery / Result Router` 배포 단위로 분리할 수 있다.
+
 AI Orchestrator 내부 구조는 **업무 기능을 기준으로 1차 분리하고, 각 기능 내부에서 역할에 따라 레이어를 정의하는 방식**을 따른다.
 
 패키지 구조를 설계할 때 다음 두 가지 질문을 기준으로 한다.
@@ -58,6 +62,7 @@ context/
 policy/
 tool/
 conversation/
+result-routing/
 ```
 
 각 기능 내부에서는 필요한 경우에만 `application`, `domain`, `infrastructure` 등의 레이어를 구성하며, 모든 기능에 동일한 레이어 구조를 강제하지 않는다.

@@ -375,7 +375,7 @@ Status: Designed
 
 ## 12. Core NATS Result Routing
 
-Core NATS는 실시간 AI Result / LLM Streaming Routing에 사용한다.
+Core NATS는 실시간 AI Result / LLM Streaming 전달에 사용한다. 현재 owner 조회와 instance subject 선택은 Core NATS가 아니라 Result Router의 책임이다.
 
 예:
 
@@ -396,8 +396,8 @@ AI 처리 중 reconnect
 userA → WebSocket Service #6
 
 Result Routing
-AI Orchestrator
-→ Session Registry에서 현재 ownerInstanceId 확인
+Result Router (initially inside AI Orchestrator)
+→ Realtime Connection Registry에서 현재 ownerInstanceId 확인
 → Core NATS
 → WebSocket Service #6
 → WebSocket Push
@@ -416,12 +416,14 @@ Result Routing 단계:
 
 ```text
 1. Omni AI Server가 executionId 기준으로 stream / result 생성
-2. AI Orchestrator 또는 Result Router가 triggerId / taskId / executionId로 실행 상태 확인
-3. routingRef, connectionId, roomSessionId, userId / roomId로 Session Registry 조회
+2. Result Router가 triggerId / taskId / executionId로 실행 상태를 확인하고 `ResultEvent`를 수신
+3. routingRef, connectionId, roomSessionId, userId / roomId로 Realtime Connection Registry 조회
 4. 현재 ownerInstanceId 확인
-5. 해당 ownerInstanceId의 WebSocket Service instance subject로 Core NATS publish
-6. 해당 instance가 local WebSocket session으로 최종 전송
+5. 해당 ownerInstanceId의 Realtime Service instance subject로 Core NATS publish
+6. 해당 instance가 자신이 소유한 local WebSocket 또는 TCP session으로 최종 전송
 ```
+
+초기 Result Router는 AI Orchestrator 내부 module로 배치할 수 있으나, session을 소유하거나 token stream을 Client까지 proxy하지 않는다. streaming의 독립 확장 또는 장애 격리가 필요해지면 동일한 `ResultEvent(executionId, routingRef, eventType, payload)` 계약으로 별도 Realtime Delivery Plane으로 분리한다.
 
 최종 전송 직전에 local session이 사라진 경우 해당 instance는 disconnect / stale routing으로 처리하고, 필요하면 Registry 재조회 또는 fallback 정책을 적용한다.
 
