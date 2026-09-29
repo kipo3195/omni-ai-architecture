@@ -13,6 +13,7 @@ Status: In Progress
 | [Client Request](client-request/README.md) | Client AI 요청 수신과 공통 실행 흐름 |
 | [Schedule Management](schedule-management/README.md) | Schedule 검증·저장과 실행 회차·보류 상태 관리 |
 | [Tool Runtime](tool-runtime/README.md) | Tool lifecycle, 권한 확인, dispatch와 결과 연결 |
+| [Result Router](result-router/README.md) | execution 검증, routingRef 해석, 현재 connection owner 기준 Result Routing |
 
 각 영역에는 공통 구현 구조를 기록하고, Conversation Start와 같은 개별 기능은 [Use Cases](../use-cases/README.md)에서 End-to-End 흐름으로 연결한다. 상위 상태는 Orchestrator 기반을 구축 중이라는 의미이며 모든 미래 기능의 완료 상태가 아니다.
 
@@ -67,6 +68,7 @@ AiExecutionUseCase
 | AiTaskFactory | Omni AI Server에 전달할 AiTask 생성 |
 | ExecutionCorrelationStore | triggerId, taskId, executionId 기준 실행 상관관계 저장 |
 | OmniAiClient | Omni AI Server 호출, timeout, error mapping |
+| ResultRouter | execution과 routingRef 검증, 현재 connection owner resolve, owner instance subject publish |
 
 ---
 

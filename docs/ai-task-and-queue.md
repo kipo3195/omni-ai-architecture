@@ -42,7 +42,7 @@ metadata
 
 필수 필드는 구현 과정에서 축소하거나 확장할 수 있다.
 
-`connectionId`, `roomSessionId`, `routingRef`는 AI 실행의 의미를 나타내는 필드가 아니라 결과 전달 대상을 해석하기 위한 correlation / routing context이다. 최종 전달 대상은 Result push 시점의 Session Registry에서 다시 확인한다.
+`connectionId`와 `routingRef`는 AI 실행의 의미를 나타내는 필드가 아니라 결과 전달 대상을 해석하기 위한 correlation / routing context이다. `roomSessionId`는 Conversation Start에 필요한 선택적 scope reference다. 최종 전달 대상은 Result push 시점의 Session Registry에서 다시 확인한다.
 
 Status: Designed
 
@@ -254,6 +254,8 @@ metadata
 
 `connectionId`는 WebSocket connection lifecycle을 식별한다. `roomSessionId`는 특정 사용자가 특정 room에 진입해 있는 logical room presence lifecycle을 식별한다. reconnect, room 이동, multi-device 상황에서는 둘이 다르게 갱신될 수 있다.
 
+`roomSessionId`는 Conversation Start처럼 room presence가 실행 유효성에 영향을 주는 AI Event에서만 사용하는 Use Case scope ID다. 모든 AiTask와 Result Routing이 이를 필수로 요구하지 않으며, 다른 Event는 자신의 scope ID를 사용하거나 별도 scope 없이 `routingRef`의 target reference만 사용할 수 있다.
+
 Registry는 다음 책임을 가진다.
 
 - WebSocket 연결 / 해제 시 현재 `ownerInstanceId` 갱신
@@ -263,6 +265,8 @@ Registry는 다음 책임을 가진다.
 - Client Tool Delivery 시 현재 target connection 조회
 
 `ownerInstanceId`는 Result 전달 시점의 현재 WebSocket owner이다. `sourceInstanceId`는 Trigger를 발행하거나 Request를 처리한 instance correlation 정보일 뿐 최종 delivery source of truth가 아니다.
+
+공통 routing 계약은 [Session Registry Based AI Result Routing](decisions/001-session-registry-result-routing.md)에서 관리하고, 구현 상세는 [Realtime Service Result Delivery](implementation/realtime-service/result-delivery/README.md)와 [AI Orchestrator Result Router](implementation/ai-orchestrator/result-router/README.md)에서 관리한다.
 
 Status: Designed
 
@@ -324,7 +328,7 @@ AI Orchestrator
 AiTask / executionId
 ```
 
-AI Task는 `triggerId` / `taskId` / `executionId`로 처리하고, Client delivery는 `connectionId` / `roomSessionId` / `routingRef`를 통해 현재 owner를 다시 resolve한다.
+AI Task는 `triggerId` / `taskId` / `executionId`로 처리하고, Client delivery는 `routingRef`의 target reference와 선택적인 Use Case scope reference를 통해 현재 owner를 다시 resolve한다.
 
 Status: Designed
 
@@ -417,7 +421,7 @@ Result Routing 단계:
 ```text
 1. Omni AI Server가 executionId 기준으로 stream / result 생성
 2. Result Router가 triggerId / taskId / executionId로 실행 상태를 확인하고 `ResultEvent`를 수신
-3. routingRef, connectionId, roomSessionId, userId / roomId로 Realtime Connection Registry 조회
+3. routingRef의 target reference와 선택적인 Use Case scope reference로 Realtime Connection Registry 조회
 4. 현재 ownerInstanceId 확인
 5. 해당 ownerInstanceId의 Realtime Service instance subject로 Core NATS publish
 6. 해당 instance가 자신이 소유한 local WebSocket 또는 TCP session으로 최종 전송

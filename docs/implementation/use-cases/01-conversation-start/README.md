@@ -79,4 +79,7 @@ Omni AI Server 실패나 timeout은 실행 실패로 기록하고 추천 없이 
 - [Server Trigger](../../ai-orchestrator/server-trigger/README.md)
 - [Task Execution](../../omni-ai-server/task-execution/README.md)
 - [Conversation Start Workflow](../../omni-ai-server/workflows/conversation-start.md)
-
+- [Session Registry Based AI Result Routing](../../../decisions/001-session-registry-result-routing.md)
+- [Realtime Service Result Delivery](../../realtime-service/result-delivery/README.md)
+- [AI Orchestrator Result Router](../../ai-orchestrator/result-router/README.md)
+- [Omni AI Server Result Event](../../omni-ai-server/result-event/README.md)
