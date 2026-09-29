@@ -62,6 +62,18 @@ Result Router는 Client나 Omni AI Server가 반환한 routing 위치를 신뢰�
 
 `scopeRef`가 있으면 `scopeRef.type`에 대응하는 validator로 Event가 아직 유효한지 확인한다. 예를 들어 Conversation Start는 `ROOM_SESSION`, Draft Assist는 `DRAFT_SESSION` validator를 사용할 수 있다. 별도 lifecycle이 없는 Event는 scope 검증을 생략한다.
 
+`DEVICE_CURRENT` target은 Realtime Service가 전달한 인증된 `tenantId + userId + deviceId`를 사용해 다음과 같이 resolve한다.
+
+```text
+rt:device-current:{tenantId}:{userId}:{deviceId}
+→ connectionId
+
+rt:connection:{tenantId}:{connectionId}
+→ ownerInstanceId
+```
+
+따라서 `ownerInstanceId`는 `routingRef`의 필수 입력이 아니다. 요청 시점의 instance 정보가 snapshot으로 포함되더라도 사용하지 않고 Result 처리 시점의 Registry 값을 최종 target으로 선택한다.
+
 ---
 
 ## Result Routing Flow

@@ -105,6 +105,20 @@ Client REST Request
 
 단일 활성 connection 정책은 `tenantId + userId + deviceId`로 조회할 수 있다. 복수 connection 정책은 WebSocket 연결 시 짧은 수명의 opaque `connectionToken`을 발급하고 REST 요청에서 이를 검증한다. Client가 보낸 내부 ID만으로 권한을 부여하지 않는다.
 
+현재 device connection으로 결과를 전달하는 요청은 Realtime Service가 다음 `routingRef`를 구성해 AI Orchestrator에 전달한다.
+
+```text
+routingRef
+  tenantId
+  userId
+  targetRef
+    type: DEVICE_CURRENT
+    deviceId
+  scopeRef (필요 시)
+```
+
+Realtime Service는 현재 `ownerInstanceId`를 최종 routing 값으로 확정해 전달하지 않는다. 요청 시점의 connection 조회는 인증과 요청 검증에 사용하고, 최종 owner는 AI Orchestrator가 Result 전달 시점에 Registry에서 다시 조회한다. Connection-bound Event라면 `targetRef.type`을 `CONNECTION`으로 설정하고 검증된 `connectionId`를 전달한다.
+
 AI Event별 `scopeRef`가 필요하다면 해당 Use Case owner가 생성하거나 검증한다. 예를 들어 Conversation Start의 `roomSessionId`는 하나의 scope ID일 뿐 Realtime Result Delivery의 공통 필수가 아니다.
 
 ---

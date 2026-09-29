@@ -88,6 +88,17 @@ routingRef
 - `DEVICE_CURRENT`: 같은 device의 현재 connection으로 다시 resolve한다.
 - `SCOPE`: Use Case scope가 현재 가리키는 connection으로 resolve한다.
 
+Realtime Service는 인증된 Client context로 `routingRef`를 만들고 AI Orchestrator에 전달한다. `DEVICE_CURRENT` 정책에서는 `tenantId`, `userId`, `deviceId`를 전달하며 현재 `ownerInstanceId`를 authoritative routing 값으로 전달하지 않는다. AI Orchestrator의 Result Router가 결과 전달 시점에 다음 순서로 현재 owner를 조회한다.
+
+```text
+tenantId + userId + deviceId
+→ current connectionId
+→ current ownerInstanceId
+→ owner instance subject
+```
+
+Realtime Service가 요청 시점에 connection이나 owner를 조회하더라도 이는 인증과 요청 검증을 위한 것이다. 최종 delivery instance는 AI Orchestrator가 Result 처리 시점에 다시 resolve한다.
+
 `scopeRef`는 공통 Session ID가 아니다. Event의 유효 범위를 독립적으로 검증해야 할 때만 사용한다. Conversation Start는 `roomSessionId`, 선택 메시지 요약은 `selectionRequestId`, Draft 보조는 `draftSessionId`를 사용할 수 있으며 별도 lifecycle이 없는 Event는 생략한다.
 
 Omni AI Server가 생성하는 공통 결과 계약은 다음과 같다.
