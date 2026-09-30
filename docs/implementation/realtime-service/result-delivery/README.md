@@ -61,6 +61,10 @@ New Login Session
 → 새로운 sid 발급
 ```
 
+여기서 같은 로그인 세션은 한 번의 로그인으로 생성된 인증 생명주기를 의미한다. 페이지 새로고침이나 WebSocket reconnect는 기존 `sid`를 유지하고 `connectionId` / `leaseId`만 새로 생성한다. Access Token reissue도 신규 로그인이 아니므로 Refresh Token에 포함된 `sid`를 신규 Access Token에 그대로 전달한다. 반면 동일 계정이라도 Client 정책에 따라 탭 전환 등으로 다시 로그인한 경우는 새 로그인 세션으로 보고 새로운 `sid`를 발급할 수 있다.
+
+`sid`는 JWT의 `clientSessionId`를 담는 claim이다. `jti`는 개별 token 식별자이므로 `clientSessionId`로 사용하지 않는다. 로그인 시 Access Token과 Refresh Token에 같은 `sid`를 넣고, reissue시에는 검증된 Refresh Token의 `sid`를 사용한다. Client가 request body로 제출한 `sid`나 `clientSessionId`는 신뢰하지 않는다.
+
 `sid`는 access token 자체나 token별 `jti`와 구분한다. `jti`는 token 재발급 때 변경될 수 있으므로 current connection pointer로 사용하지 않는다.
 
 REST와 WebSocket 요청을 처리하는 Realtime Service는 JWT의 서명, 만료, issuer, audience를 검증한 뒤 `tenantId`, `userId`, `sid`를 추출한다. Client가 별도 header, request body 또는 WebSocket message로 보낸 `clientSessionId`를 routing 권한의 근거로 사용하지 않는다.
