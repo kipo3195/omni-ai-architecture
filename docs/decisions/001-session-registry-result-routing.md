@@ -8,24 +8,24 @@ Omni AI 기능은 Client explicit request와 Server trigger 양쪽에서 시작�
 
 예:
 
-- `enterRoom` 기반 Conversation Start
 - 선택 메시지 요약
 - 현재 화면 기반 질문
 - Draft 보조
 - `USER_RETURNED` 기반 urgent summary
 - `LABEL_MATCHED` 기반 multimodal action
+- `ENTER_ROOM` 기반 Conversation Start
 
-이때 Trigger 또는 API 요청을 처리한 `WebSocket Service` instance와 실제 WebSocket connection을 소유한 instance가 다를 수 있다.
+이때 Trigger 또는 API 요청을 처리한 `Realtime Service` instance와 실제 WebSocket / TCP connection을 소유한 instance가 다를 수 있다.
 
 ```text
 enterRoom 처리
-Client → WebSocket Service #1
+Client → Realtime Service #1
 
 AI 처리 중 reconnect
-Client WebSocket → WebSocket Service #6
+Client WebSocket / TCP → Realtime Service #6
 
 Result push
-WebSocket Service #1로 보내면 실패하거나 stale session이 된다.
+Realtime Service #1로 보내면 실패하거나 stale session이 된다.
 ```
 
 Scale-out, scale-in, instance restart, reconnect, session migration, multi-device 상황에서도 같은 문제가 발생한다.
@@ -50,20 +50,7 @@ lastSeenAt
 expiresAt
 capabilities
 ```
-
-Conversation Start의 `enterRoom` 호출 시에는 `roomSessionId`를 생성하고 현재 `connectionId` / `ownerInstanceId`와 연결한다.
-
-```text
-roomSessionId
-roomId
-connectionId
-ownerInstanceId
-enteredAt
-lastSeenAt
-expiresAt
-```
-
-AI 실행은 `triggerId` / `taskId` / `executionId`로 처리한다. Client delivery는 `routingRef`의 target reference와 필요한 경우 Use Case별 scope reference를 통해 현재 target을 resolve한다. `roomSessionId`는 Conversation Start에서 사용하는 scope reference의 예시이며 모든 AI Event의 공통 필드는 아니다.
+AI 실행은 `triggerId` / `taskId` / `executionId`로 처리한다. Client delivery는 `routingRef`의 target reference와 필요한 경우 Use Case별 scope reference를 통해 현재 target을 resolve한다. 
 
 ### Common Routing Contract
 
@@ -99,7 +86,7 @@ tenantId + userId + deviceId
 
 Realtime Service가 요청 시점에 connection이나 owner를 조회하더라도 이는 인증과 요청 검증을 위한 것이다. 최종 delivery instance는 AI Orchestrator가 Result 처리 시점에 다시 resolve한다.
 
-`scopeRef`는 공통 Session ID가 아니다. Event의 유효 범위를 독립적으로 검증해야 할 때만 사용한다. Conversation Start는 `roomSessionId`, 선택 메시지 요약은 `selectionRequestId`, Draft 보조는 `draftSessionId`를 사용할 수 있으며 별도 lifecycle이 없는 Event는 생략한다.
+`scopeRef`는 공통 Session ID가 아니다. Event의 유효 범위를 독립적으로 검증해야 할 때만 사용한다. 
 
 Omni AI Server가 생성하는 공통 결과 계약은 다음과 같다.
 
@@ -173,7 +160,7 @@ Realtime Service, AI Orchestrator, Omni AI Server 사이에는 sticky session이
 
 구현에서는 `deviceId`를 connection 자체의 식별자로 사용하지 않는다. Realtime 연결마다 고유한 `connectionId`와 lease를 생성하고, 단일 활성 연결 정책이 필요한 경우 `deviceId`는 현재 `connectionId`를 가리키는 pointer로 사용한다. Reconnect는 새 connection을 등록한 뒤 pointer를 교체하며, heartbeat와 disconnect는 자신의 connection / lease가 현재 값과 일치할 때만 갱신하거나 삭제한다.
 
-`routingRef`의 instance 정보는 요청 시점의 snapshot 또는 correlation 정보다. Result Router는 결과 전달 직전에 target reference와 선택적인 Use Case scope reference를 통해 현재 owner를 다시 resolve한다. Conversation Start에서는 이 scope reference가 `roomSessionId`다. Registry에서 유효한 target을 찾지 못한 경우 요청 당시 instance로 무조건 fallback하지 않으며, 재조회, drop, durable delivery 중 Use Case에 맞는 정책을 적용한다.
+`routingRef`의 instance 정보는 요청 시점의 snapshot 또는 correlation 정보다. Result Router는 결과 전달 직전에 target reference와 선택적인 Use Case scope reference를 통해 현재 owner를 다시 resolve한다. Registry에서 유효한 target을 찾지 못한 경우 요청 당시 instance로 무조건 fallback하지 않으며, 재조회, drop, durable delivery 중 Use Case에 맞는 정책을 적용한다.
 
 ### Delivery Semantics
 
