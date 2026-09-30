@@ -202,6 +202,31 @@ Status: Designed
 
 ---
 
+## WebSocket Realtime Service MVP는 인증 세션을 현재 connection의 논리적 target으로 사용한다
+
+결정
+→ 인증 서버가 로그인 세션 단위의 `clientSessionId`를 생성하고 JWT의 `sid` claim으로 발급한다.
+
+→ WebSocket Realtime Service는 REST와 WebSocket 요청의 검증된 JWT에서 `tenantId` / `userId` / `sid`를 추출하고, `CLIENT_SESSION_CURRENT` target으로 현재 connection을 조회한다.
+
+→ 동일 `clientSessionId`에는 하나의 활성 connection만 허용하며 새 connection이 기존 connection을 원자적으로 교체한다.
+
+배경
+→ WebSocket Realtime Service MVP 대상 Client는 신뢰할 수 있는 별도 device ID를 제공하지 않는다. Client가 ID 생성, 저장, 복수 실행 환경 간 동기화와 삭제 정책을 소유하면 플랫폼별 구현 및 동시 배포 의존성이 증가한다.
+
+이유
+→ 기존 JWT 인증 흐름 안에서 routing identity를 서버가 발급하고 검증해 Client별 식별 기능 의존성을 줄이고, reconnect 후에도 같은 로그인 세션의 현재 connection으로 Result를 전달한다.
+
+Trade-off
+→ Authentication Session과 Realtime Connection lifecycle의 결합이 증가한다. Token refresh에서 `sid`를 유지하고 logout, session revocation, WebSocket 종료, Registry 정리를 일관되게 처리해야 한다. 동일 JWT를 공유하는 복수 connection은 구분하지 않으므로 MVP에서는 최신 connection만 유지한다.
+
+Related
+→ [ADR 005. WebSocket Realtime Service Result Routing by Authenticated Client Session](decisions/005-websocket-realtime-client-session-result-routing.md)
+
+Status: Designed
+
+---
+
 ## AI Orchestrator는 Streaming Data Plane이 아니다
 
 결정

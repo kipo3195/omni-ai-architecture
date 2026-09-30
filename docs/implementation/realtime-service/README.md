@@ -21,6 +21,7 @@ Realtime Service는 WebSocket 또는 TCP connection을 소유하고 Client proto
 - Realtime connection lifecycle 관리
 - Realtime Connection Registry 등록과 갱신
 - 인증된 Client와 connection correlation
+- Browser JWT `sid`와 현재 connection correlation
 - REST / WebSocket 요청의 delivery target resolution
 - AI Result의 local connection lookup과 최종 전송
 

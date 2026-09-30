@@ -242,6 +242,7 @@ connectionId
 tenantId
 userId
 deviceId (필요 시)
+clientSessionId
 roomId (필요 시)
 roomSessionId (필요 시)
 ownerInstanceId
@@ -287,6 +288,7 @@ Connection Registry 등록
   - connectionId
   - ownerInstanceId
   - userId / tenantId
+  - clientSessionId (Browser에서는 검증된 JWT sid)
   - capabilities
 
 Client enterRoom

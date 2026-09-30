@@ -91,3 +91,4 @@ Status: Proposed | Accepted | Superseded
 - [002. Tool Runtime Ownership and Client Tool Dispatch](002-tool-runtime-ownership-client-tool-dispatch.md)
 - [003. AI Orchestrator as an Application Service](003-ai-orchestrator-application-service.md)
 - [004. AI Execution and Context Identifier Separation](004-ai-execution-and-context-identifiers.md)
+- [005. WebSocket Realtime Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)

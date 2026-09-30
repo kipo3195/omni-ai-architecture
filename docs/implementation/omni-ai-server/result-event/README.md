@@ -23,7 +23,7 @@ AiTask
   input
 ```
 
-Omni AI Server는 `deviceId`, `connectionId`, `ownerInstanceId`를 해석하거나 Realtime target을 선택하지 않는다. Routing context의 source of truth는 AI Orchestrator가 소유한다.
+Omni AI Server는 `deviceId`, `clientSessionId`, `connectionId`, `ownerInstanceId`를 해석하거나 Realtime target을 선택하지 않는다. Routing context의 source of truth는 AI Orchestrator가 소유한다.
 
 ---
 

@@ -42,6 +42,7 @@ channelType
 tenantId
 userId
 deviceId (필요 시)
+clientSessionId (WebSocket Realtime Service 인증 세션 target인 경우)
 ownerServiceType
 ownerInstanceId
 leaseId
@@ -61,8 +62,9 @@ routingRef
   tenantId
   userId
   targetRef
-    type: CONNECTION | DEVICE_CURRENT | SCOPE
+    type: CONNECTION | DEVICE_CURRENT | CLIENT_SESSION_CURRENT | SCOPE
     deviceId (필요 시)
+    clientSessionId (필요 시)
     connectionId (필요 시)
   scopeRef (필요 시)
     type
@@ -73,6 +75,7 @@ routingRef
 
 - `CONNECTION`: 요청 당시 exact connection에만 전달하고 reconnect 후에는 drop한다.
 - `DEVICE_CURRENT`: 같은 device의 현재 connection으로 다시 resolve한다.
+- `CLIENT_SESSION_CURRENT`: 같은 인증 Client session의 현재 connection으로 다시 resolve한다.
 - `SCOPE`: Use Case scope가 현재 가리키는 connection으로 resolve한다.
 
 Realtime Service는 인증된 Client context로 `routingRef`를 만들고 AI Orchestrator에 전달한다. `DEVICE_CURRENT` 정책에서는 `tenantId`, `userId`, `deviceId`를 전달하며 현재 `ownerInstanceId`를 authoritative routing 값으로 전달하지 않는다. AI Orchestrator의 Result Router가 결과 전달 시점에 다음 순서로 현재 owner를 조회한다.
@@ -83,6 +86,17 @@ tenantId + userId + deviceId
 → current ownerInstanceId
 → owner instance subject
 ```
+
+WebSocket Realtime Service MVP는 신뢰할 수 있는 별도 `deviceId`를 Client에서 추출하거나 저장하도록 요구하지 않는다. 인증 서버가 발급한 JWT의 `sid`를 검증해 `clientSessionId`로 사용하고 `CLIENT_SESSION_CURRENT` target을 구성한다. Result Router는 다음 순서로 현재 owner를 조회한다.
+
+```text
+tenantId + userId + clientSessionId
+→ current connectionId
+→ current ownerInstanceId
+→ owner instance subject
+```
+
+`clientSessionId`는 Client가 request payload로 제출한 값을 사용하지 않고 검증된 인증 context에서만 얻는다. 같은 로그인 세션에서 access token을 refresh하면 `sid`를 유지한다. 상세한 WebSocket Realtime Service MVP 인증 및 단일 활성 connection 정책은 [ADR 005](005-websocket-realtime-client-session-result-routing.md)를 따른다.
 
 Realtime Service가 요청 시점에 connection이나 owner를 조회하더라도 이는 인증과 요청 검증을 위한 것이다. 최종 delivery instance는 AI Orchestrator가 Result 처리 시점에 다시 resolve한다.
 
@@ -124,6 +138,7 @@ DeliveryEvent
 ```text
 Client WebSocket Connect
 → 임의의 Realtime Service instance
+→ 인증 context에서 logical target 식별자 확인
 → connectionId / leaseId 생성
 → Realtime Connection Registry 등록
 
@@ -158,7 +173,7 @@ Realtime Service, AI Orchestrator, Omni AI Server 사이에는 sticky session이
 
 `sourceInstanceId`는 correlation 정보로만 사용한다. 최종 delivery source of truth로 사용하지 않는다. Connection Registry는 WebSocket 전용이 아니라 WebSocket / TCP Realtime Service가 각자 등록하는 Realtime Connection Registry로 확장한다. 각 Realtime Service는 자신의 local connection을 소유하고 최종 push를 수행한다.
 
-구현에서는 `deviceId`를 connection 자체의 식별자로 사용하지 않는다. Realtime 연결마다 고유한 `connectionId`와 lease를 생성하고, 단일 활성 연결 정책이 필요한 경우 `deviceId`는 현재 `connectionId`를 가리키는 pointer로 사용한다. Reconnect는 새 connection을 등록한 뒤 pointer를 교체하며, heartbeat와 disconnect는 자신의 connection / lease가 현재 값과 일치할 때만 갱신하거나 삭제한다.
+구현에서는 `deviceId`나 `clientSessionId`를 connection 자체의 식별자로 사용하지 않는다. Realtime 연결마다 고유한 `connectionId`와 lease를 생성하고, 단일 활성 연결 정책이 필요한 경우 논리적 target ID는 현재 `connectionId`를 가리키는 pointer로 사용한다. Reconnect는 새 connection을 등록한 뒤 pointer를 교체하며, heartbeat와 disconnect는 자신의 connection / lease가 현재 값과 일치할 때만 갱신하거나 삭제한다.
 
 `routingRef`의 instance 정보는 요청 시점의 snapshot 또는 correlation 정보다. Result Router는 결과 전달 직전에 target reference와 선택적인 Use Case scope reference를 통해 현재 owner를 다시 resolve한다. Registry에서 유효한 target을 찾지 못한 경우 요청 당시 instance로 무조건 fallback하지 않으며, 재조회, drop, durable delivery 중 Use Case에 맞는 정책을 적용한다.
 
@@ -218,3 +233,4 @@ Routing 판단은 한 곳에 모을 수 있지만, `AI Orchestrator`가 Streamin
 - [Realtime Service Result Delivery](../implementation/realtime-service/result-delivery/README.md)
 - [AI Orchestrator Result Router](../implementation/ai-orchestrator/result-router/README.md)
 - [Omni AI Server Result Event](../implementation/omni-ai-server/result-event/README.md)
+- [ADR 005. WebSocket Realtime Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)

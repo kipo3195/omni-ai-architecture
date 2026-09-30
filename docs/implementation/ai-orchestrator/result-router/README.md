@@ -8,7 +8,7 @@ Status: Designed
 
 AI Orchestrator가 `executionId`로 실행 상태와 trusted `routingRef`를 복원하고, 현재 Realtime connection owner를 선택해 Result를 전달하는 구현 책임을 정의한다.
 
-공통 이벤트 계약과 전체 흐름은 [ADR 001](../../../decisions/001-session-registry-result-routing.md)을 따른다.
+공통 이벤트 계약과 전체 흐름은 [ADR 001](../../../decisions/001-session-registry-result-routing.md)을 따른다. WebSocket Realtime Service MVP의 인증 세션 기반 target은 [ADR 005](../../../decisions/005-websocket-realtime-client-session-result-routing.md)를 따른다.
 
 ---
 
@@ -72,6 +72,23 @@ rt:connection:{tenantId}:{connectionId}
 → ownerInstanceId
 ```
 
+WebSocket Realtime Service MVP의 `CLIENT_SESSION_CURRENT` target은 Realtime Service가 검증된 JWT의 `sid`에서 구성한 `tenantId + userId + clientSessionId`를 사용한다.
+
+```text
+rt:client-session-current:{tenantId}:{userId}:{clientSessionId}
+→ connectionId
+
+rt:connection:{tenantId}:{connectionId}
+→ {
+    userId,
+    clientSessionId,
+    ownerInstanceId,
+    leaseId
+  }
+```
+
+Result Router는 resolved connection record의 `userId`와 `clientSessionId`가 trusted `routingRef`와 일치하는지 확인한다. ResultEvent나 Client가 전달한 별도 `clientSessionId`를 authoritative 값으로 사용하지 않는다.
+
 따라서 `ownerInstanceId`는 `routingRef`의 필수 입력이 아니다. 요청 시점의 instance 정보가 snapshot으로 포함되더라도 사용하지 않고 Result 처리 시점의 Registry 값을 최종 target으로 선택한다.
 
 ---
@@ -126,5 +143,6 @@ Core NATS publish 성공은 Client 수신 성공을 의미하지 않는다. 수�
 ## Related
 
 - [ADR 001. Session Registry Based AI Result Routing](../../../decisions/001-session-registry-result-routing.md)
+- [ADR 005. WebSocket Realtime Service Result Routing by Authenticated Client Session](../../../decisions/005-websocket-realtime-client-session-result-routing.md)
 - [Realtime Service Result Delivery](../../realtime-service/result-delivery/README.md)
 - [Omni AI Server Result Event](../../omni-ai-server/result-event/README.md)
