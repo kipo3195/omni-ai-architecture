@@ -45,7 +45,7 @@ routingRef
     clientSessionId
 ```
 
-`clientSessionId`는 connection 자체가 아니라 현재 connection을 찾기 위한 논리적 pointer다. WebSocket 연결마다 `connectionId`와 `leaseId`를 새로 생성한다.
+`clientSessionId`는 connection 자체가 아니라 현재 connection을 찾기 위한 논리적 pointer다. WebSocket 연결마다 재사용하지 않는 `connectionId`를 새로 생성한다. `leaseId`는 향후 connection ownership 갱신이나 인계가 필요한 경우 사용할 수 있는 확장 필드이며 MVP에서는 사용하지 않는다.
 
 ```text
 rt:client-session-current:{tenantId}:{userId}:{clientSessionId}
@@ -66,7 +66,40 @@ rt:connection:{tenantId}:{connectionId}
 
 동일한 `clientSessionId`로 새 WebSocket이 연결되면 새 connection이 current pointer를 원자적으로 교체한다. 이전 connection에는 가능한 경우 `SESSION_REPLACED`를 전달한 뒤 종료한다. 새 연결을 거절하지 않는 이유는 Client reload나 네트워크 복구 과정에서 stale connection 때문에 정상 reconnect가 막히는 것을 피하기 위해서다.
 
-Heartbeat와 disconnect는 자신의 `connectionId + leaseId`가 현재 값과 일치할 때만 current pointer를 갱신하거나 삭제한다. 이전 connection의 늦은 heartbeat나 disconnect가 새 connection 상태를 덮어쓰면 안 된다.
+Heartbeat와 disconnect는 자신이 current connection의 소유자인 경우에만 current pointer를 갱신하거나 삭제한다. 이전 connection의 늦은 heartbeat나 disconnect가 새 connection 상태를 덮어쓰면 안 된다.
+
+### Connection lifecycle and TTL
+
+`CLIENT_SESSION_CURRENT` pointer와 connection 상세정보에는 TTL을 적용한다. TTL은 정상 disconnect 처리를 대신하지 않으며, Process crash, network partition 또는 callback 누락으로 명시적인 정리가 수행되지 못했을 때 stale connection 정보를 제거하기 위한 최종 안전장치다.
+
+정상 disconnect에서는 종료되는 connection의 상세정보를 즉시 삭제한다. Current pointer는 pointer가 가리키는 `connectionId`가 종료되는 connection과 일치할 때만 삭제한다. 동일한 `clientSessionId`로 reconnect가 완료된 후 이전 connection의 disconnect가 늦게 실행되더라도 새로운 current pointer를 삭제해서는 안 된다.
+
+Heartbeat가 확인된 활성 connection은 주기적으로 다음 정보를 갱신한다.
+
+- current pointer TTL
+- connection 상세정보 TTL
+- `lastSeenAt`
+
+Heartbeat callback마다 Redis를 갱신할 필요는 없다. WebSocket Server는 connection별 마지막 heartbeat 수신 시각과 마지막 Redis 갱신 시각을 관리하고, 설정된 갱신 주기가 지난 활성 connection만 TTL을 연장한다. TTL과 갱신 주기는 고정된 protocol 값이 아니라 운영 환경에 따라 조정할 수 있는 설정값으로 관리한다.
+
+Current pointer 확인과 TTL 갱신 또는 삭제는 하나의 원자적 Redis 연산으로 처리한다. 비교와 변경을 별도 명령으로 실행하면 비교 직후 reconnect가 발생하여 이전 connection이 새로운 current connection의 상태를 갱신하거나 삭제할 수 있다.
+
+```text
+compare-and-refresh:
+  current == connectionId
+    → current TTL 갱신
+    → connection TTL 갱신
+    → lastSeenAt 갱신
+
+compare-and-delete:
+  current == connectionId
+    → current 삭제
+  종료 대상 connection 상세정보 삭제
+```
+
+Redis Lua script 또는 동일한 원자성을 제공하는 방식을 사용한다. 원자적 연산이 실행되는 동안 다른 connection의 reconnect, heartbeat 또는 disconnect 명령은 중간에 끼어들지 않으며 연산 단위로 직렬 실행된다.
+
+MVP에서는 WebSocket 연결마다 재사용하지 않는 ULID `connectionId`를 생성하므로 current connection의 소유권 비교에 `connectionId`를 사용한다. 향후 connection ownership을 별도로 갱신하거나 인계해야 하는 요구가 생기면 `leaseId`를 발급하고 `connectionId + leaseId`를 함께 비교한다.
 
 로그아웃, 인증 세션 만료 또는 강제 session revocation 시 해당 `clientSessionId`의 current pointer와 활성 connection을 무효화한다. 기존 인증 세션에서 시작한 AI Result를 이후 생성된 다른 로그인 세션으로 자동 전달하지 않는다.
 
@@ -111,6 +144,7 @@ WebSocket 연결별 opaque token을 발급하고 REST 요청에서 함께 전달
 - Authentication Session과 Realtime Connection lifecycle 사이의 결합이 증가한다.
 - access token refresh에서 `sid`를 유지하고, logout과 session revocation을 Connection Registry 및 활성 WebSocket과 연동해야 한다.
 - JWT 검증 자체는 stateless하게 유지할 수 있지만 current connection 조회를 위한 Registry 상태와 운영 책임이 필요하다.
+- Heartbeat 기반 TTL 갱신과 disconnect 정리는 current connection 소유권을 원자적으로 확인해야 하며, Redis 장애 시 stale 정보는 TTL 만료까지 남을 수 있다.
 - `clientSessionId`는 물리 장치나 Client 설치를 식별하지 않으므로 신뢰 기기 관리, 장치 감사, push token 또는 장기 분석 ID로 사용할 수 없다.
 - 동일 JWT를 공유하는 복수 connection은 구분할 수 없다. MVP에서는 새 connection이 기존 connection을 교체해 하나의 활성 connection만 유지한다.
 - 향후 복수 connection, exact-connection delivery 또는 실제 device management가 필요하면 `connectionToken`, connection set 또는 별도 device identifier가 필요하다.
