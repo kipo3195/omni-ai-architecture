@@ -37,7 +37,9 @@ Use Case를 먼저 E2E로 구현하고, 둘 이상의 기능에서 재사용이 
 | Service | Area | 현재 문서 내용 |
 | --- | --- | --- |
 | [Realtime Service](realtime-service/README.md) | [Result Delivery](realtime-service/result-delivery/README.md) | Connection Registry, reconnect fencing, REST target resolution, local Client delivery |
+| Realtime Service | [User AI Settings](realtime-service/user-ai-settings/README.md) | 사용자 AI 설정 API, DB 저장, Redis cache 갱신 |
 | [AI Orchestrator](ai-orchestrator/README.md) | [Spring Architecture](ai-orchestrator/spring-architecture/README.md) | Spring 서비스 구조의 기록 범위 |
+| AI Orchestrator | [Policy](ai-orchestrator/policy/README.md) | Global / Feature / User Policy 조회와 AI 실행 여부 판단 |
 | AI Orchestrator | [Server Trigger](ai-orchestrator/server-trigger/README.md) | Conversation Start의 현재 실행 흐름과 구현 경계 |
 | AI Orchestrator | [Client Request](ai-orchestrator/client-request/README.md) | Client 요청 경로의 기록 범위 |
 | AI Orchestrator | [Schedule Management](ai-orchestrator/schedule-management/README.md) | Schedule과 실행 회차 관리의 기록 범위 |

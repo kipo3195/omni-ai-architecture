@@ -92,3 +92,4 @@ Status: Proposed | Accepted | Superseded
 - [003. AI Orchestrator as an Application Service](003-ai-orchestrator-application-service.md)
 - [004. AI Execution and Context Identifier Separation](004-ai-execution-and-context-identifiers.md)
 - [005. WebSocket Realtime Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)
+- [006. AI Feature Enablement Policy and User Preference Strategy](006-ai-feature-enablement-policy-and-user-preference.md)

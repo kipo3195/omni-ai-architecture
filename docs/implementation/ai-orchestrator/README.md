@@ -9,6 +9,7 @@ Status: In Progress
 | Area | 기록 범위 |
 | --- | --- |
 | [Spring Architecture](spring-architecture/README.md) | Spring 서비스 구성, 패키지 경계, 공통 기반 |
+| [Policy](policy/README.md) | Global / Feature / User Policy 조회와 AI 실행 여부 판단 |
 | [Server Trigger](server-trigger/README.md) | Business Event 수신부터 실행 판단, Context Assembly, AiTask 생성까지 |
 | [Client Request](client-request/README.md) | Client AI 요청 수신과 공통 실행 흐름 |
 | [Schedule Management](schedule-management/README.md) | Schedule 검증·저장과 실행 회차·보류 상태 관리 |
@@ -28,6 +29,7 @@ AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현한다
 - Business Event 수신
 - Client AI Request 수신
 - Trigger Policy 판단
+- Global / Feature / User Policy 판단
 - Context Assembly
 - AiTask 생성
 - Omni AI Server 호출
@@ -47,6 +49,7 @@ Client / Event
 TriggerController / EventConsumer
   ↓
 AiExecutionUseCase
+  ├─ AiExecutionPolicyService
   ├─ TriggerPolicy
   ├─ ContextAssembler
   ├─ AiTaskFactory
@@ -63,7 +66,8 @@ AiExecutionUseCase
 | TriggerController | Client explicit AI request 수신 |
 | EventConsumer | Business Event / AI Trigger 수신 |
 | AiExecutionUseCase | AI 실행 판단과 실행 흐름 조정 |
-| TriggerPolicy | feature, permission, cooldown, dedup 판단 |
+| TriggerPolicy | trigger condition, permission, cooldown, dedup 판단 |
+| AiExecutionPolicyService | Global, User, Feature Policy를 적용해 AI 실행 허용 여부 판단 |
 | ContextAssembler | 각 Domain Service가 소유한 데이터를 조회하고, AI 실행에 필요한 Context 형태로 조합 |
 | AiTaskFactory | Omni AI Server에 전달할 AiTask 생성 |
 | ExecutionCorrelationStore | triggerId, taskId, executionId 기준 실행 상관관계 저장 |
