@@ -2,7 +2,7 @@
 
 > Role: 사용자에게 전달되는 End-to-End AI 기능을 기준으로 구현 순서와 진행 상태를 관리한다.
 > Status: In Progress
-> 실제 흐름과 완료 조건은 [Use Cases](implementation/use-cases/README.md), 서비스 내부 구조는 [Implementation](implementation/README.md)에 기록한다.
+> 실제 흐름과 완료 조건은 [Use Cases](use-cases/README.md), 서비스 내부 구조는 [Components](components/README.md)에 기록한다.
 
 ---
 
@@ -44,7 +44,7 @@ ROOM_ENTERED / ROOM_LEFT
 - Leave Room 이후 취소된 실행이나 오래된 결과가 전달되지 않는다.
 - Business Rule과 AI Runtime 책임이 분리되어 있다.
 
-상세: [Conversation Start](implementation/use-cases/01-conversation-start/README.md)
+상세: [Conversation Start](use-cases/01-conversation-start.md)
 
 ---
 
@@ -77,7 +77,7 @@ AWAY → ONLINE
 - 쪽지가 없는 경우 LLM을 호출하지 않는다.
 - 생성된 Topic Digest가 Client에 전달되고 원본 메시지와 연결된다.
 
-상세: [Returned Message Topics](implementation/use-cases/02-returned-message-topics/README.md)
+상세: [Returned Message Topics](use-cases/02-returned-message-topics.md)
 
 ---
 
@@ -110,7 +110,7 @@ Client LLM이 사용자의 자연어 요청을 `ScheduleSpec`으로 변환하고
 - 오프라인 상태에서는 AI를 실행하지 않고 회차를 보류한다.
 - 복귀 후 사용자 확인 결과에 따라 보류 회차를 실행하거나 종료한다.
 
-상세: [Scheduled Weekly Report](implementation/use-cases/03-scheduled-weekly-report/README.md)
+상세: [Scheduled Weekly Report](use-cases/03-scheduled-weekly-report.md)
 
 ---
 
@@ -142,7 +142,7 @@ Phase 3의 Schedule 실행 구조를 유지하면서, 자연어를 ScheduleSpec�
 - LLM 결과가 직접 Scheduler를 변경하지 않는다.
 - Phase 3의 실행·보류·전달 구조를 수정하지 않고 재사용한다.
 
-상세: [Server Schedule Intent](implementation/use-cases/04-server-schedule-intent/README.md)
+상세: [Server Schedule Intent](use-cases/04-server-schedule-intent.md)
 
 ---
 
@@ -178,7 +178,7 @@ LLM이 실행 중 필요한 Tool을 선택하는 구체적인 AI 기능을 구�
 - Tool 결과 수신 후 중단된 AI 실행이 재개된다.
 - 데이터 변경이나 외부 전송은 사용자 확인을 거친다.
 
-상세: [Tool-assisted AI](implementation/use-cases/05-tool-assisted-ai/README.md)
+상세: [Tool-assisted AI](use-cases/05-tool-assisted-ai.md)
 
 ---
 

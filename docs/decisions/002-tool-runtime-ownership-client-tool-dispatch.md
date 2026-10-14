@@ -100,7 +100,7 @@ Tool lifecycle과 LLM streaming / progress event를 모두 Tool Runtime으로 �
 
 ## Related
 
-- [Architecture](../architecture.md)
-- [Client Tool Integration](../client-integration.md)
-- [AiTask and Queue](../ai-task-and-queue.md)
-- [Design Decisions](../design-decisions.md)
+- [Architecture](../overview.md)
+- [Client Tool Integration](../concepts/client-integration.md)
+- [AiTask and Queue](../concepts/ai-task-and-queue.md)
+- [Design Decisions](summary.md)

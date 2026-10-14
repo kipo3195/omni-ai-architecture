@@ -77,6 +77,6 @@ executionId
 
 ## Related
 
-- [Architecture](../architecture.md)
+- [Architecture](../overview.md)
 - [Session Registry Based AI Result Routing](001-session-registry-result-routing.md)
 - [AI Orchestrator as an Application Service](003-ai-orchestrator-application-service.md)

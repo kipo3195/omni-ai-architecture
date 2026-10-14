@@ -6,7 +6,7 @@
 
 ## Purpose
 
-`docs/design-decisions.md`는 주요 설계 결정의 요약 인덱스이고, 이 디렉터리는 개별 결정의 상세 기록을 보관한다.
+[Decision Summary](summary.md)는 주요 설계 결정의 요약 인덱스이고, 이 디렉터리는 개별 결정의 상세 기록을 보관한다.
 
 ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"와 "어떤 Trade-off를 감수했는가"를 남기기 위한 문서이다.
 
@@ -38,7 +38,7 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 - retry / timeout / duplicate 방지 정책 변경
 - 비용이나 latency에 큰 영향을 주는 구조 변경
 
-사소한 구현 메모나 일시적인 버그는 `docs/notes/`에 기록한다.
+일시적인 문제와 해결 과정은 [Troubleshooting](../troubleshooting.md)에 기록한다.
 
 ---
 

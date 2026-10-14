@@ -226,11 +226,11 @@ Routing 판단은 한 곳에 모을 수 있지만, `AI Orchestrator`가 Streamin
 
 ## Related
 
-- [AiTask and Queue](../ai-task-and-queue.md)
-- [Server-driven AI](../server-driven-ai.md)
-- [Client Tool Integration](../client-integration.md)
-- [Design Decisions](../design-decisions.md)
-- [Realtime Service Result Delivery](../implementation/realtime-service/result-delivery/README.md)
-- [AI Orchestrator Result Router](../implementation/ai-orchestrator/result-router/README.md)
-- [Omni AI Server Result Event](../implementation/omni-ai-server/result-event/README.md)
+- [AiTask and Queue](../concepts/ai-task-and-queue.md)
+- [Server-driven AI](../concepts/server-driven-ai.md)
+- [Client Tool Integration](../concepts/client-integration.md)
+- [Design Decisions](summary.md)
+- [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)
+- [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)
+- [Omni AI Server Result Event](../components/omni-ai-server/result-event.md)
 - [ADR 005. WebSocket Realtime Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)

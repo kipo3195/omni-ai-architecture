@@ -108,5 +108,5 @@ AI 가용성은 높아지지만 관리자가 차단했거나 사용자가 비활
 ## Related
 
 - [ADR 003. AI Orchestrator as an Application Service](003-ai-orchestrator-application-service.md)
-- [Architecture](../architecture.md)
-- [Service Boundary and Migration](../service-boundary-and-migration.md)
+- [Architecture](../overview.md)
+- [Service Boundary and Migration](../concepts/service-boundary-and-migration.md)

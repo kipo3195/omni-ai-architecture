@@ -149,6 +149,6 @@ Omni AI Server가 Business Event, Client Request, Trigger Policy, Context Assemb
 
 ## Related
 
-* [Architecture](../architecture.md)
-* [Service Boundary and Migration](../service-boundary-and-migration.md)
-* [AI Orchestrator Implementation](../implementation/ai-orchestrator/README.md)
+* [Architecture](../overview.md)
+* [Service Boundary and Migration](../concepts/service-boundary-and-migration.md)
+* [AI Orchestrator Implementation](../components/ai-orchestrator/README.md)

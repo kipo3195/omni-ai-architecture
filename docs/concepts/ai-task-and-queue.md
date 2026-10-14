@@ -1,0 +1,510 @@
+# AiTask and Queue
+
+> Role: AiTask 모델, Trigger 전달, 실행 경계, Result Routing을 설명하는 문서
+> 이 문서는 AiTask, NATS JetStream Trigger, Omni AI Server 실행 경계, Core NATS Result Routing을 설명한다. Queue 운영 구현 완료를 의미하지 않는다.
+
+---
+
+## 1. AiTask
+
+AiTask는 AI 실행이 확정된 작업을 표현하는 공통 실행 단위이다.
+
+Business Event나 Client Request가 "무슨 일이 들어왔는가"를 나타낸다면, AiTask는 "AI가 무엇을 실행해야 하는가"를 나타낸다.
+
+
+---
+
+## 2. Candidate Fields
+
+초기 필드 후보:
+
+```text
+taskId
+taskType
+triggerId
+triggerType
+executionId
+conversationId (필요 시)
+connectionId (필요 시)
+roomSessionId (필요 시)
+tenantId
+userId
+roomId
+requestedAt
+priority
+workloadType
+routingRef
+contextRef
+metadata
+```
+
+필수 필드는 구현 과정에서 축소하거나 확장할 수 있다.
+
+`connectionId`와 `routingRef`는 AI 실행의 의미를 나타내는 필드가 아니라 결과 전달 대상을 해석하기 위한 correlation / routing context이다. `roomSessionId`는 Conversation Start에 필요한 선택적 scope reference다. 최종 전달 대상은 Result push 시점의 Session Registry에서 다시 확인한다.
+
+
+---
+
+## 3. Not a Raw Context Carrier
+
+AiTask를 대화 원문 운반 객체로 만들지 않는다.
+
+권장:
+
+```text
+AiTask
+  - task metadata
+  - trigger / execution correlation
+  - contextRef
+  - small metadata
+```
+
+지양:
+
+```text
+AiTask
+  - full chat history
+  - large client local data
+  - raw file content
+```
+
+대용량 Context는 AiTask payload에 직접 싣지 않고 Context Store, Service API / gRPC, 또는 명시적으로 계약된 Projection에서 조회하는 방향으로 둔다. Domain Service가 소유한 DB / Redis를 `AI Orchestrator`가 직접 읽는 방식은 기본 전략으로 두지 않는다.
+
+
+---
+
+## 4. Trigger Event
+
+NATS JetStream은 재처리 가능성이 필요한 Business Event / AI Trigger 전달에 사용한다.
+
+예:
+
+```text
+user.status.returned
+realtime.room.entered
+schedule.occurrence.triggered
+```
+
+초기 Use Case의 `taskType` 후보는 다음과 같다.
+
+```text
+CONVERSATION_START
+RETURNED_MESSAGE_TOPICS
+WEEKLY_REPORT_SUMMARY
+SCHEDULE_INTENT_PARSE
+TOOL_ASSISTED_AI
+```
+
+구현 순서와 각 Task의 완료 조건은 [End-to-End Use Cases](../use-cases/README.md)에서 관리한다.
+
+Trigger Event 후보 필드:
+
+```text
+eventId
+triggerId
+eventType
+tenantId
+userId
+roomId
+occurredAt
+expiresAt 또는 maxAge
+sourceService
+sourceInstanceId (필요 시)
+connectionId (필요 시)
+roomSessionId (필요 시)
+conversationId (필요 시)
+metadata
+```
+
+AI Trigger는 시간 민감도가 높을 수 있다. 오래된 Trigger가 재처리되었을 때 의미 없는 AI 결과가 생성되지 않도록 `expiresAt` 또는 `maxAge`를 둔다.
+
+
+---
+
+## 5. Trigger-to-Task Condition
+
+Omni AI Server에는 실행이 확정된 Task만 전달한다.
+
+```text
+Server-triggered path                  Client-explicit path
+Business Event                         Client Request
+        ↓                                      ↓
+NATS JetStream (필요 시)                Permission / Context Scope
+        ↓                                      ↓
+AI Orchestrator                         AI Orchestrator
+        └──────────── Trigger Policy / Context Assembly ────────────┘
+                                      ↓
+                              SKIP / EXECUTE
+                                      ↓
+        └──── EXECUTE인 경우에만 AiTask 생성 ──┘
+        ↓
+Omni AI Server
+```
+
+NATS JetStream은 모든 AI 실행이 확정된 Task만 받는 실행 큐가 아니다. 재처리와 ACK가 필요한 Business Event / AI Trigger를 전달하는 경계이다.
+
+
+---
+
+## 6. NATS JetStream Role
+
+NATS JetStream은 Messenger 핵심 흐름과 AI Trigger 처리를 분리한다.
+
+- Business Event / AI Trigger 전달
+- Durable Consumer
+- ACK
+- retry
+- Consumer 장애 후 재처리
+- Trigger expiration 정책 적용
+
+
+---
+
+## 7. Omni AI Server Execution Boundary
+
+`Omni AI Server`는 실행이 확정된 AiTask를 처리한다.
+
+```text
+AiTask
+  ↓
+Task Router
+  ↓
+Context Resolution
+  ↓
+Workflow Execution 또는 Agent Execution
+  ↓
+LLM / Model / Tool
+  ↓
+Validation
+  ↓
+Structured Result
+```
+
+Business Rule과 Trigger Policy 판단은 Omni AI Server 호출 이전에 끝나야 한다.
+
+
+---
+
+## 8. Conversation State Boundary
+
+`AI Orchestrator`는 Product Application을 위한 Conversation Metadata를 관리한다.
+
+```text
+conversationId
+userId
+tenantId
+workflowType
+title
+createdAt
+updatedAt
+status
+archived
+access policy
+```
+
+`Omni AI Server`는 다음 LLM 호출을 위한 Runtime State를 관리한다.
+
+```text
+User Turn
+Assistant Turn
+Conversation History
+Conversation Summary
+LangGraph Checkpoint
+Tool State
+Agent State
+Prompt Context
+```
+
+`WebSocket Service`의 WebSocket Session과 `conversationId`는 다른 lifecycle을 가진다.
+
+
+---
+
+## 9. Connection Ownership Registry
+
+AI 기능은 Trigger를 처리한 instance와 실제 WebSocket이 붙어 있는 instance가 다를 수 있다는 전제를 가진다.
+
+`WebSocket Service`는 WebSocket 연결 시 Connection Registry에 현재 연결 owner를 등록한다.
+
+Registry 후보 key / value:
+
+```text
+connectionId
+tenantId
+userId
+deviceId (필요 시)
+clientSessionId
+roomId (필요 시)
+roomSessionId (필요 시)
+ownerInstanceId
+connectedAt
+lastSeenAt
+expiresAt
+capabilities
+metadata
+```
+
+`connectionId`는 WebSocket connection lifecycle을 식별한다. `roomSessionId`는 특정 사용자가 특정 room에 진입해 있는 logical room presence lifecycle을 식별한다. reconnect, room 이동, multi-device 상황에서는 둘이 다르게 갱신될 수 있다.
+
+`roomSessionId`는 Conversation Start처럼 room presence가 실행 유효성에 영향을 주는 AI Event에서만 사용하는 Use Case scope ID다. 모든 AiTask와 Result Routing이 이를 필수로 요구하지 않으며, 다른 Event는 자신의 scope ID를 사용하거나 별도 scope 없이 `routingRef`의 target reference만 사용할 수 있다.
+
+Registry는 다음 책임을 가진다.
+
+- WebSocket 연결 / 해제 시 현재 `ownerInstanceId` 갱신
+- `enterRoom` / `leaveRoom` 시 `roomSessionId`와 `connectionId` 연결
+- heartbeat / TTL 기반 stale owner 제거
+- Result push 시 현재 owner instance 조회
+- Client Tool Delivery 시 현재 target connection 조회
+
+`ownerInstanceId`는 Result 전달 시점의 현재 WebSocket owner이다. `sourceInstanceId`는 Trigger를 발행하거나 Request를 처리한 instance correlation 정보일 뿐 최종 delivery source of truth가 아니다.
+
+공통 routing 계약은 [Session Registry Based AI Result Routing](../decisions/001-session-registry-result-routing.md)에서 관리하고, 구현 상세는 [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)와 [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)에서 관리한다.
+
+
+---
+
+## 10. Client Explicit Request and enterRoom Correlation
+
+`enterRoom`처럼 Client가 명시적으로 호출하는 API는 AI 실행 후보를 만들 수 있지만, 해당 API를 처리한 instance가 최종 WebSocket delivery owner라고 가정하지 않는다.
+
+권장 흐름:
+
+```text
+Client WebSocket Connect
+  ↓
+WebSocket Service
+  ↓
+Connection Registry 등록
+  - connectionId
+  - ownerInstanceId
+  - userId / tenantId
+  - clientSessionId (Browser에서는 검증된 JWT sid)
+  - capabilities
+
+Client enterRoom
+  ↓
+WebSocket Service
+  ↓
+roomSessionId 생성
+  ↓
+roomSessionId ↔ connectionId ↔ ownerInstanceId 연결
+  ↓
+AI Orchestrator
+  - Business Policy / Trigger Policy
+  - Context Assembly
+  - Execution Correlation
+  ↓
+AiTask 생성
+  - triggerId
+  - taskId
+  - executionId
+  - connectionId 또는 roomSessionId
+  - routingRef
+  ↓
+Omni AI Server
+```
+
+`enterRoom` 외에도 선택 메시지 요약, 현재 화면 기반 질문, Draft 보조, Client Local Context가 필요한 요청은 동일한 원칙을 따른다.
+
+```text
+Client Explicit Request
+  ↓
+WebSocket Service
+  ↓
+Authentication / Session / Permission
+  ↓
+connectionId / roomSessionId correlation
+  ↓
+AI Orchestrator
+  ↓
+AiTask / executionId
+```
+
+AI Task는 `triggerId` / `taskId` / `executionId`로 처리하고, Client delivery는 `routingRef`의 target reference와 선택적인 Use Case scope reference를 통해 현재 owner를 다시 resolve한다.
+
+
+---
+
+## 11. Server-triggered Target Resolution
+
+Server-triggered AI 기능도 명확한 target client resolution을 거쳐야 한다.
+
+예:
+
+```text
+USER_RETURNED
+LABEL_MATCHED
+SCHEDULE_TRIGGERED
+MESSAGE_CREATED
+```
+
+Server Trigger는 특정 WebSocket connection에서 시작되지 않을 수 있다. 이 경우 Trigger에는 user / tenant / room / business context를 담고, `AI Orchestrator`가 Result 전달 전에 현재 target connection을 resolve한다.
+
+```text
+Business Event
+  ↓
+NATS JetStream (필요 시)
+  ↓
+AI Orchestrator
+  ↓
+Policy / Context Assembly
+  ↓
+AiTask
+  ↓
+Omni AI Server
+  ↓
+Result Push
+  ↓
+Session Registry에서 target connection / ownerInstanceId 확인
+```
+
+Target이 없는 경우에는 기능 성격에 따라 처리한다.
+
+- 즉시 전달이 필요한 stream: fail / timeout / fallback
+- 재접속 후 확인 가능한 결과: Conversation / Notification 저장 후 later delivery
+- 이미 의미가 사라진 trigger: expiresAt / maxAge 기준으로 drop
+
+
+---
+
+## 12. Core NATS Result Routing
+
+Core NATS는 실시간 AI Result / LLM Streaming 전달에 사용한다. 현재 owner 조회와 instance subject 선택은 Core NATS가 아니라 Result Router의 책임이다.
+
+예:
+
+```text
+ai.stream.exec-123
+ai.result.realtime.instance-03
+```
+
+AI 결과 자체의 영속성보다 현재 연결된 사용자에게 빠르게 결과를 전달하는 것이 중요한 경우 Core NATS가 적합하다.
+
+Trigger 당시 Instance가 최종 Delivery 대상이라고 가정하지 않는다.
+
+```text
+Trigger 시점
+userA → WebSocket Service #1
+
+AI 처리 중 reconnect
+userA → WebSocket Service #6
+
+Result Routing
+Result Router (initially inside AI Orchestrator)
+→ Realtime Connection Registry에서 현재 ownerInstanceId 확인
+→ Core NATS
+→ WebSocket Service #6
+→ WebSocket Push
+```
+
+`sourceInstanceId`는 correlation 정보로 사용할 수 있지만, 최종 Routing의 절대적인 Source of Truth로 사용하지 않는다.
+
+Instance-targeted subject 후보:
+
+```text
+ai.result.realtime.{ownerInstanceId}
+ai.stream.realtime.{ownerInstanceId}
+```
+
+Result Routing 단계:
+
+```text
+1. Omni AI Server가 executionId 기준으로 stream / result 생성
+2. Result Router가 triggerId / taskId / executionId로 실행 상태를 확인하고 `ResultEvent`를 수신
+3. routingRef의 target reference와 선택적인 Use Case scope reference로 Realtime Connection Registry 조회
+4. 현재 ownerInstanceId 확인
+5. 해당 ownerInstanceId의 Realtime Service instance subject로 Core NATS publish
+6. 해당 instance가 자신이 소유한 local WebSocket 또는 TCP session으로 최종 전송
+```
+
+초기 Result Router는 AI Orchestrator 내부 module로 배치할 수 있으나, session을 소유하거나 token stream을 Client까지 proxy하지 않는다. streaming의 독립 확장 또는 장애 격리가 필요해지면 동일한 `ResultEvent(executionId, routingRef, eventType, payload)` 계약으로 별도 Realtime Delivery Plane으로 분리한다.
+
+최종 전송 직전에 local session이 사라진 경우 해당 instance는 disconnect / stale routing으로 처리하고, 필요하면 Registry 재조회 또는 fallback 정책을 적용한다.
+
+
+---
+
+## 13. Stream Event
+
+LLM Stream을 `AI Orchestrator`가 token-by-token proxy하지 않는 방향을 우선한다.
+
+```text
+Omni AI Server
+  ↓
+Core NATS
+  ↓
+WebSocket Service
+  ↓
+Client
+```
+
+Stream Event 후보:
+
+```text
+START
+STATUS
+DELTA
+PROGRESS
+COMPLETED
+FAILED
+```
+
+공통 필드 후보:
+
+```text
+executionId
+conversationId
+type
+sequence
+content
+metadata
+```
+
+Stream Event는 Client UX를 위한 token delta 또는 execution progress event다. Tool lifecycle의 source of truth로 사용하지 않는다.
+
+Tool lifecycle event는 Tool Runtime이 관리한다.
+
+```text
+TOOL_CREATED
+TOOL_DISPATCHED
+TOOL_PROGRESS
+TOOL_COMPLETED
+TOOL_FAILED
+TOOL_TIMEOUT
+```
+
+Tool lifecycle event는 `toolCallId` 기준의 공식 상태 전이에 사용하고, Stream Event는 `executionId` 기준의 표시용 진행 상태에 사용한다. 따라서 Stream Event가 Tool lifecycle event보다 먼저 도착하거나 늦게 도착해도 execution correctness가 깨지지 않도록 설계한다.
+
+
+---
+
+## 14. Workload Split
+
+초기에는 Orchestrator consumer와 Omni AI Server 실행 자원을 단순하게 시작한다.
+
+향후 실제 부하 특성이 확인되면 workload 기준으로 분리할 수 있다.
+
+```text
+REALTIME
+NORMAL
+BACKGROUND
+HEAVY
+```
+
+Event Type은 Business 확장 단위이고, Queue / Consumer / Worker Pool은 자원 격리 단위이다.
+
+
+---
+
+## 15. Execution Policy
+
+Execution Policy는 이미 승인된 Task의 실행 안정성을 다룬다.
+
+- retry
+- timeout
+- rate limit
+- duplicate execution 방지
+- backpressure
+- failure handling
+- result routing timeout
+

@@ -153,5 +153,5 @@ WebSocket 연결별 opaque token을 발급하고 REST 요청에서 함께 전달
 ## Related
 
 - [ADR 001. Session Registry Based AI Result Routing](001-session-registry-result-routing.md)
-- [Realtime Service Result Delivery](../implementation/realtime-service/result-delivery/README.md)
-- [AI Orchestrator Result Router](../implementation/ai-orchestrator/result-router/README.md)
+- [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)
+- [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)
