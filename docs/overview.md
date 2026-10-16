@@ -427,7 +427,7 @@ Instance Restart
 Session Migration
 ```
 
-최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다. `enterRoom`이나 Client explicit request를 처리한 instance는 correlation 정보로만 보고, `connectionId` / `roomSessionId`를 통해 Realtime Connection Registry에서 현재 `ownerInstanceId`를 resolve한다. Result Router는 owner instance subject를 선택할 뿐 session을 소유하지 않으며, Realtime Service가 local connection으로 최종 push한다.
+최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다. `enterRoom`이나 Client explicit request를 처리한 instance는 correlation 정보로만 보고, `connectionId` / `roomSessionId`를 통해 Realtime Connection Registry에서 현재 `ownerInstanceId`를 resolve한다. 특정 Client 종류로 전달을 제한하는 Use Case는 Realtime/Messenger 경계가 검증한 선택적 `routingRef.connectionType`을 함께 저장하고, Result Router가 현재 connection record와 일치하는지 확인한다. Result Router는 owner instance subject를 선택할 뿐 session을 소유하지 않으며, Realtime Service가 local connection으로 최종 push한다.
 
 
 ---

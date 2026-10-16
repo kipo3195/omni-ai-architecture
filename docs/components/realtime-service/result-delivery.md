@@ -27,6 +27,7 @@ rt:connection:{tenantId}:{connectionId}
     userId,
     clientSessionId,
     channelType,
+    connectionType,
     ownerServiceType,
     ownerInstanceId,
     leaseId,
@@ -35,6 +36,8 @@ rt:connection:{tenantId}:{connectionId}
     capabilities
   }
 ```
+
+`channelType`은 WebSocket/TCP 같은 transport 구분이고, `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 연결 구분이다. 특정 Use Case가 `routingRef.connectionType`을 사용하면 Registry record에 같은 값을 저장해 Result Router와 local delivery가 검증할 수 있게 한다. Returned Message Topics에서는 Desktop Client의 legacy `connectType 1, 2`가 이 값으로 사용된다.
 
 `connectionId`와 `leaseId`는 연결할 때마다 새로 생성한다. `connectionId`는 UUIDv7 또는 ULID처럼 충돌 가능성이 낮은 값을 사용하고, process-local object hash나 timestamp 단독 값은 사용하지 않는다.
 
@@ -150,10 +153,11 @@ routingRef
   targetRef
     type: CLIENT_SESSION_CURRENT
     clientSessionId
+  connectionType (Use Case가 요구하는 경우)
   scopeRef (필요 시)
 ```
 
-Realtime Service는 현재 `ownerInstanceId`를 최종 routing 값으로 확정해 전달하지 않는다. 요청 시점의 connection 조회는 인증과 요청 검증에 사용하고, 최종 owner는 AI Orchestrator가 Result 전달 시점에 Registry에서 다시 조회한다. 로그인 세션 경계를 유지하기 때문에 기존 세션에서 시작한 Result를 로그아웃 후 생성된 다른 `clientSessionId`로 자동 전달하지 않는다.
+Realtime Service는 현재 `ownerInstanceId`를 최종 routing 값으로 확정해 전달하지 않는다. 요청 시점의 connection 조회는 인증과 요청 검증에 사용하고, 최종 owner는 AI Orchestrator가 Result 전달 시점에 Registry에서 다시 조회한다. 로그인 세션 경계를 유지하기 때문에 기존 세션에서 시작한 Result를 로그아웃 후 생성된 다른 `clientSessionId`로 자동 전달하지 않는다. `connectionType`이 필요한 Use Case에서는 Client가 보낸 원시값이 아니라 인증된 local connection context의 값을 `routingRef`에 넣는다.
 
 Connection-bound Event라면 `targetRef.type`을 `CONNECTION`으로 설정하고 검증된 `connectionId`를 전달한다. 향후 요청한 exact connection을 지정해야 한다면 WebSocket 연결별 짧은 수명의 opaque `connectionToken`을 발급하고 REST 요청에서 검증하는 정책을 추가한다.
 
@@ -168,8 +172,9 @@ Realtime Service는 instance subject에서 받은 `DeliveryEvent.connectionId`�
 ```text
 1. exact connectionId local lookup
 2. event.userId와 local connection의 인증 주체 비교
-3. 필요한 경우 scopeRef를 shared Registry로 재검증
-4. Client protocol로 변환하여 전송
+3. DeliveryEvent.connectionType이 있으면 local connection의 connectionType과 비교
+4. 필요한 경우 scopeRef를 shared Registry로 재검증
+5. Client protocol로 변환하여 전송
 ```
 
 `clientSessionId`나 `deviceId`만 일치한다는 이유로 다른 local connection에 전달하지 않는다. `DeliveryEvent.connectionId`와 local connection의 인증 주체가 모두 일치해야 한다. Local connection이 없으면 delivery miss로 처리한다. Acknowledgement 경로가 있다면 AI Orchestrator가 Registry를 재조회할 수 있도록 miss를 반환하고, 없다면 metric과 structured log를 남긴다.

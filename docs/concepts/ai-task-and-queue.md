@@ -230,6 +230,8 @@ Registry 후보 key / value:
 
 ```text
 connectionId
+channelType
+connectionType (Use Case가 요구하는 경우)
 tenantId
 userId
 deviceId (필요 시)
@@ -245,6 +247,8 @@ metadata
 ```
 
 `connectionId`는 WebSocket connection lifecycle을 식별한다. `roomSessionId`는 특정 사용자가 특정 room에 진입해 있는 logical room presence lifecycle을 식별한다. reconnect, room 이동, multi-device 상황에서는 둘이 다르게 갱신될 수 있다.
+
+`channelType`은 WebSocket/TCP transport를 나타낸다. `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 연결 구분으로, 특정 Client 종류로 delivery를 제한하는 Use Case에서만 `routingRef`의 선택적 constraint로 사용한다. Returned Message Topics는 Desktop의 legacy `connectType 1, 2` 중 요청 connection의 값을 사용한다.
 
 `roomSessionId`는 Conversation Start처럼 room presence가 실행 유효성에 영향을 주는 AI Event에서만 사용하는 Use Case scope ID다. 모든 AiTask와 Result Routing이 이를 필수로 요구하지 않으며, 다른 Event는 자신의 scope ID를 사용하거나 별도 scope 없이 `routingRef`의 target reference만 사용할 수 있다.
 
@@ -413,8 +417,9 @@ Result Routing 단계:
 2. Result Router가 triggerId / taskId / executionId로 실행 상태를 확인하고 `ResultEvent`를 수신
 3. routingRef의 target reference와 선택적인 Use Case scope reference로 Realtime Connection Registry 조회
 4. 현재 ownerInstanceId 확인
-5. 해당 ownerInstanceId의 Realtime Service instance subject로 Core NATS publish
-6. 해당 instance가 자신이 소유한 local WebSocket 또는 TCP session으로 최종 전송
+5. routingRef.connectionType이 있으면 connection record와 일치 여부 확인
+6. 해당 ownerInstanceId의 Realtime Service instance subject로 Core NATS publish
+7. 해당 instance가 자신이 소유한 local WebSocket 또는 TCP session으로 최종 전송
 ```
 
 초기 Result Router는 AI Orchestrator 내부 module로 배치할 수 있으나, session을 소유하거나 token stream을 Client까지 proxy하지 않는다. streaming의 독립 확장 또는 장애 격리가 필요해지면 동일한 `ResultEvent(executionId, routingRef, eventType, payload)` 계약으로 별도 Realtime Delivery Plane으로 분리한다.

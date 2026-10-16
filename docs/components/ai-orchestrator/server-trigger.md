@@ -56,15 +56,30 @@ Realtime Service가 방 입장 비즈니스 이벤트 처리
 
 ## 다음 적용 사례: Returned Message Topics
 
-사용자 상태가 `AWAY → ONLINE`으로 변경되면 자리비움 구간과 수신 쪽지를 확인하고, Topic Extraction이 필요한 경우 AiTask를 생성한다.
+Desktop Client의 `connectType 1, 2`에서 사용자 상태가 `AWAY/OFFLINE → ONLINE`으로 변경되면 자리비움 구간과 수신 쪽지를 확인한다. unread 메시지가 있으면 사용자에게 먼저 실행 여부를 확인하고, 유효한 `YES` 응답을 받은 경우에만 Topic Extraction AiTask를 생성한다.
 
 ```text
-USER_RETURNED
-  → absence period 확인
-  → 해당 기간의 수신 쪽지 조회
-  → no message / duplicate / expired 판단
+WS/NS → AI Orchestrator REST API
+  → USER_RETURNED request
+  → Desktop / connectType 1, 2 확인
+  → absence period / min-max duration / expiration 확인
+  → Message Query Port
+  → 현재 Message owner의 내부 DB 조회 Queue
+  → unread 후보 선정과 messageSelectionRef 생성
+      ├─ 0건: SKIPPED_NO_MESSAGES
+      └─ N건: AWAITING_CONFIRMATION 팝업 전달
+  → Client YES
+  → selection의 현재 readDate와 관계없이 Context Assembly
   → RETURNED_MESSAGE_TOPICS AiTask
-  → Topic Digest 결과 전달
+  → Topic Digest + Priority 결과 생성
+  → routingRef의 target과 connectionType으로 현재 owner resolve
+  → Client가 로컬 삭제 상태를 반영해 결과 노출
 ```
+
+현재는 `USER_RETURNED` NATS JetStream Consumer가 구현되어 있지 않으므로 WS/NS가 공통 AI Orchestrator REST API를 호출한다. WS/NS별 AI Trigger Queue는 두지 않는다. REST retry는 동일한 `triggerId`를 사용해 멱등 처리한다. 향후 durable Trigger가 필요해지면 동일한 request 계약을 JetStream adapter로 확장할 수 있다.
+
+현재 Messenger 구조의 DB 조회 Queue는 해당 Message owner가 계속 소유하고, AI Orchestrator는 이를 감싼 Message Query Port를 통해 조정할 뿐 쪽지 DB를 직접 조회하지 않는다. 향후 Message Service가 분리되면 Port의 infrastructure adapter만 Service API, gRPC 또는 Projection으로 교체한다.
+
+`routingRef.connectionType`은 Realtime/Messenger 경계가 검증한 Desktop connection의 `connectType` 값을 담는다. Result Router는 Result 전달 시점에 논리 target의 현재 connection을 다시 조회하고 Registry record의 `connectionType`이 trusted `routingRef`와 일치할 때만 전달한다. 이 Use Case는 사용자 전체 connection에 broadcast하지 않는다.
 
 이 적용 사례의 상태는 `Planned`다. 상세 범위는 [Returned Message Topics Use Case](../../use-cases/02-returned-message-topics.md)에서 관리한다.

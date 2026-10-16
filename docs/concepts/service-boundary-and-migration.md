@@ -30,6 +30,8 @@ TCP Realtime Service
 
 즉 현재 기준으로 WebSocket Service의 내부 책임이 `user-service`, `auth-service`, `file-service`로 물리적으로 분리되어 있다고 가정하지 않는다.
 
+Returned Message Topics의 쪽지 조회도 현재는 해당 Messenger Service가 내부 DB 조회 Queue와 조회 로직을 소유한다. AI Orchestrator는 이 구현을 직접 소유하거나 쪽지 DB에 접근하지 않고 Message Query Port를 통해 사용한다.
+
 
 ---
 
@@ -102,7 +104,7 @@ file-service
 
 ## 5. Remaining Decisions
 
-- `WebSocket Service` 분리 시 unread count 계산 주체
+- `WebSocket Service` 분리 시 현재 내부 DB 조회 Queue와 unread count 계산 책임을 어느 Message Service/API로 이전할지
 - `user-service`에서 Label / Address Book을 유지할지 별도 분리할지
 - `file-service`의 AI Context 연계 범위
 - `auth-service`와 tenant policy 연계 방식

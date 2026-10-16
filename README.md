@@ -178,7 +178,7 @@ docs/
 
 | Document type | Status |
 | --- | --- |
-| Roadmap / Use Case | `Planned → In Progress → Implemented`; 상태의 기준은 Roadmap 한 곳이다. |
-| Component | `Planned → In Progress → Implemented`; 실제 구현과 검증 수준을 나타낸다. |
-| ADR | `Proposed → Accepted → Superseded`; 결정의 승인 상태를 나타낸다. |
+| Roadmap / Use Case | `Planned → In Progress → Implemented` 상태의 기준은 Roadmap 한 곳이다. |
+| Component | `Planned → In Progress → Implemented` 실제 구현과 검증 수준을 나타낸다. |
+| ADR | `Proposed → Accepted → Superseded` 결정의 승인 상태를 나타낸다. |
 | Architecture / Concept | 상태를 표시하지 않고 Current와 Target을 본문에서 명시한다. |

@@ -198,16 +198,29 @@ USER_RETURNED
   ↓
 user-service
   ↓
-NATS JetStream
+AI Orchestrator REST API (현재)
   ↓
 AI Orchestrator
+  ├─ DesktopConnectionPolicy(connectType 1, 2)
   ├─ AwayDurationPolicy
   ├─ ReceivedMessagePolicy
   ├─ DuplicatePeriodPolicy
   └─ PermissionPolicy
   ↓
-AiTask(RETURNED_MESSAGE_TOPICS)
+Message Query Port → 현재 Message owner의 내부 DB 조회 Queue
+  ↓
+Unread messageSelectionRef 생성
+  ↓
+Client confirmation
+  ├─ NO / timeout: 종료
+  └─ YES: AiTask(RETURNED_MESSAGE_TOPICS)
 ```
+
+이 Use Case의 Message Query Port는 현재 Messenger Service가 소유한 내부 DB 조회 Queue를 사용할 수 있다. AI Orchestrator는 조회를 조정하되 쪽지 DB를 직접 읽지 않는다. 사용자 확인 후 AI 실행이 시작되면 최초 selection에 포함된 메시지는 현재 읽음 여부와 관계없이 처리하고, 삭제 여부는 결과 노출 시 Client가 로컬 상태로 판단한다.
+
+현재 Returned Message Topics의 직접 진입점은 WS/NS가 호출하는 AI Orchestrator REST API다. REST retry는 동일한 `triggerId`로 멱등 처리한다. 공통 NATS JetStream 경계는 향후 Trigger 재처리와 durable delivery가 필요할 때 동일한 request 계약을 수용하는 Target adapter다.
+
+확인 팝업과 결과는 모든 사용자 connection에 broadcast하지 않는다. Realtime/Messenger 경계가 검증한 요청 Desktop connection의 `connectType`을 trusted `routingRef.connectionType`에 저장하고, Result Router가 같은 connection type의 현재 owner를 선택한다.
 
 
 ### Label Multimodal Action
@@ -249,7 +262,7 @@ Policy
 AiTask
 ```
 
-여러 Service의 상태를 조합하거나 재처리가 필요한 Trigger는 NATS JetStream을 통해 `AI Orchestrator`로 전달한다.
+Target Architecture에서 여러 Service의 상태를 조합하거나 재처리가 필요한 Trigger는 NATS JetStream을 통해 `AI Orchestrator`로 전달할 수 있다. 현재 Returned Message Topics는 위에서 설명한 REST API 경로를 사용하며 아래 흐름은 JetStream adapter가 도입된 이후의 목표 구조다.
 
 ```text
 USER_RETURNED

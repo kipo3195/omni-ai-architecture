@@ -68,10 +68,13 @@ routingRef
   tenantId
   userId
   targetRef
+  connectionType (필요 시)
   scopeRef (필요 시)
 ```
 
 Result Router는 Client나 Omni AI Server가 반환한 routing 위치를 신뢰하지 않는다. `executionId`로 Orchestrator가 저장한 `routingRef`를 조회한다.
+
+`connectionType`은 특정 Client 종류로 delivery를 제한해야 하는 Use Case의 선택적 constraint다. `channelType`이 WebSocket/TCP transport를 의미하는 것과 달리, `connectionType`은 Realtime/Messenger 경계가 인증된 connection context에서 판정한 제품별 연결 구분이다. Returned Message Topics에서는 Desktop Client의 legacy `connectType 1, 2` 중 요청을 발생시킨 값을 trusted `routingRef`에 저장한다.
 
 `scopeRef`가 있으면 `scopeRef.type`에 대응하는 validator로 Event가 아직 유효한지 확인한다. 예를 들어 Conversation Start는 `ROOM_SESSION`, Draft Assist는 `DRAFT_SESSION` validator를 사용할 수 있다. 별도 lifecycle이 없는 Event는 scope 검증을 생략한다.
 
@@ -95,12 +98,15 @@ rt:connection:{tenantId}:{connectionId}
 → {
     userId,
     clientSessionId,
+    connectionType,
     ownerInstanceId,
     leaseId
   }
 ```
 
 Result Router는 resolved connection record의 `userId`와 `clientSessionId`가 trusted `routingRef`와 일치하는지 확인한다. ResultEvent나 Client가 전달한 별도 `clientSessionId`를 authoritative 값으로 사용하지 않는다.
+
+trusted `routingRef.connectionType`이 있으면 resolved connection record의 값과 추가로 비교한다. 불일치하면 요청 당시 instance, 다른 connection type 또는 사용자의 다른 connection으로 fallback하지 않고 routing failure로 처리한다.
 
 따라서 `ownerInstanceId`는 `routingRef`의 필수 입력이 아니다. 요청 시점의 instance 정보가 snapshot으로 포함되더라도 사용하지 않고 Result 처리 시점의 Registry 값을 최종 target으로 선택한다.
 
@@ -114,9 +120,10 @@ Result Router는 resolved connection record의 `userId`와 `clientSessionId`가 
 3. supersession 정책이 있으면 active executionId 일치 확인
 4. scopeRef가 있으면 Use Case validator 실행
 5. targetRef 정책에 따라 현재 connectionId resolve
-6. Connection Registry에서 current ownerInstanceId resolve
-7. owner instance subject로 DeliveryEvent publish
-8. terminal event라면 execution 상태 전이와 조건부 active key 삭제
+6. Connection Registry에서 current ownerInstanceId와 connectionType resolve
+7. routingRef.connectionType이 있으면 일치 여부 검증
+8. owner instance subject로 DeliveryEvent publish
+9. terminal event라면 execution 상태 전이와 조건부 active key 삭제
 ```
 
 Core NATS subject 예시는 다음과 같다.

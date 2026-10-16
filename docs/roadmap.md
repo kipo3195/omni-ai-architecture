@@ -52,30 +52,37 @@ ROOM_ENTERED / ROOM_LEFT
 
 Status: Planned
 
-사용자의 상태가 자리비움에서 온라인으로 변경되면 자리비움 동안 수신한 쪽지를 조회하고, Omni AI Server가 발신자와 업무 주제 중심의 Topic Digest를 생성해 전달한다.
+Desktop Client의 `connectType 1, 2`에서 사용자가 자리비움에서 온라인으로 복귀하면 자리비움 동안의 unread 쪽지를 조회한다. 대상이 있으면 사용자에게 실행 여부를 확인하고, 동의한 경우 Omni AI Server가 발신자·업무 주제·우선순위 중심의 Topic Digest를 생성해 요청 connection으로 전달한다.
 
 ```text
-AWAY → ONLINE
+Desktop connectType 1 또는 2: AWAY/OFFLINE → ONLINE
 → AI Orchestrator
-→ 자리비움 구간의 수신 쪽지 조회
-→ Omni AI Server: Topic Extraction
+→ 현재 Message owner의 DB 조회 Queue를 통한 unread 후보 선정
+→ Client 요약 실행 확인
+→ YES: Omni AI Server Topic Extraction + Priority
 → Topic Digest 알림
-→ Client
+→ routingRef와 동일한 connectionType의 현재 Client
 ```
 
 주요 범위:
 
-- 상태 변경 이벤트와 자리비움 구간 식별
-- 대상 쪽지가 없을 때 실행하지 않는 정책
-- 발신자별 또는 대화별 Topic Extraction
+- Desktop `connectType 1, 2` 상태 변경 이벤트와 자리비움 구간 식별
+- 최소·최대 부재 시간과 장기 부재/만료 정책
+- 현재 Message owner의 DB 조회 Queue를 사용한 unread 후보 선정
+- unread가 없거나 사용자가 동의하지 않을 때 실행하지 않는 정책
+- 발신자별 또는 대화별 Topic Extraction과 근거 기반 우선순위
 - 동일 복귀 구간에 대한 중복 실행 방지
-- 원본 쪽지로 이동할 수 있는 결과 계약
+- 요청 connectionType을 포함하는 trusted `routingRef`와 현재 owner 기반 전달
+- Client 로컬 삭제 상태 반영과 원본 쪽지로 이동할 수 있는 결과 계약
 
 완료 기준:
 
-- 동일 복귀 이벤트는 한 번만 처리된다.
-- 쪽지가 없는 경우 LLM을 호출하지 않는다.
-- 생성된 Topic Digest가 Client에 전달되고 원본 메시지와 연결된다.
+- Desktop `connectType 1, 2` 이외의 복귀는 기능을 시작하지 않는다.
+- 동일 복귀 이벤트와 사용자 확인 응답은 한 번만 처리된다.
+- unread 쪽지가 없거나 사용자가 동의하지 않은 경우 LLM을 호출하지 않는다.
+- AI 실행이 시작된 뒤에는 최초 후보의 현재 읽음 여부와 관계없이 처리한다.
+- 생성된 Topic Digest가 요청 connectionType의 현재 Client에 전달된다.
+- Client가 로컬에서 삭제된 원본을 제외하고 결과와 원본 메시지를 연결한다.
 
 상세: [Returned Message Topics](use-cases/02-returned-message-topics.md)
 

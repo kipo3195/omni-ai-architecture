@@ -43,7 +43,10 @@ routingRef
   targetRef
     type: CLIENT_SESSION_CURRENT
     clientSessionId
+  connectionType (Use Case가 요구하는 경우)
 ```
+
+`connectionType`은 모든 WebSocket Result의 필수값이 아니다. Returned Message Topics처럼 특정 Desktop connection type으로 전달을 제한하는 Use Case에서는 Realtime/Messenger 경계가 인증된 local connection context의 값을 설정하고, Result Router가 current connection record와 일치하는지 검증한다.
 
 `clientSessionId`는 connection 자체가 아니라 현재 connection을 찾기 위한 논리적 pointer다. WebSocket 연결마다 재사용하지 않는 `connectionId`를 새로 생성한다. `leaseId`는 향후 connection ownership 갱신이나 인계가 필요한 경우 사용할 수 있는 확장 필드이며 MVP에서는 사용하지 않는다.
 
@@ -55,6 +58,7 @@ rt:connection:{tenantId}:{connectionId}
 → {
     userId,
     clientSessionId,
+    connectionType,
     ownerServiceType,
     ownerInstanceId,
     leaseId,
