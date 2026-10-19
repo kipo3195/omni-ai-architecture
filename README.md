@@ -36,32 +36,35 @@ Business Event / User State / Business Data / User Request
 
 이 세 흐름은 각각 [Conversation Start](docs/use-cases/01-conversation-start.md), [Returned Message Topics](docs/use-cases/02-returned-message-topics.md), [Scheduled Weekly Report](docs/use-cases/03-scheduled-weekly-report.md)에서 다룬다.
 
-## Target Architecture
+## Architecture Direction
 
-아래 구조는 현재 배포 상태가 아니라 **Target Architecture / Evolution Direction**이다. 1차 범위는 현재 WebSocket Service를 즉시 분리하는 것이 아니라, WebSocket 및 TCP Realtime Service가 함께 사용할 수 있는 `AI Orchestrator`와 `Omni AI Server`의 공통 경계를 구축하는 것이다.
+이 프로젝트는 현재 배포된 Messenger 구조를 출발점으로 `AI Orchestrator`와 `Omni AI Server`를 연결한다. Web Client는 `WebSocket Service (WS)`, 기존 Native Client는 `TCP Service (NS)`를 통해 접속한다. 두 서비스를 포괄하는 논리적 경계를 `Messenger Client Ingress`라고 부른다.
+
+아래 그림은 **Accepted ADR을 반영한 Target Architecture**다. 현재 구현은 Conversation Start REST ingress, 메모리 Repository와 Scheduler, REST Result Delivery를 사용하며, JetStream Trigger, 공통 AiTask, Tool Runtime과 Core NATS Result Delivery는 단계적으로 연결한다. 실제 구현 경계는 [Current Implementation Status](#current-implementation-status)와 [Server Trigger](docs/components/ai-orchestrator/server-trigger.md)를 기준으로 확인한다.
 
 ```mermaid
 flowchart TD
-    C[Messenger Client]
-    W[WebSocket Service]
-    T[TCP Realtime Service]
-    S[Messenger Domain Services]
+    WC[Web Client]
+    NC[Native Client]
+    W[WebSocket Service<br/>WS]
+    T[TCP Service<br/>NS]
     J[NATS JetStream<br/>Business Event / AI Trigger]
     O[AI Orchestrator<br/>Policy / Context / Correlation]
     A[Omni AI Server<br/>Workflow / Agent / LLM]
     R[Result Router<br/>current owner resolve]
     N[Core NATS<br/>owner instance subject]
 
-    C <-->|WebSocket| W
-    C <-->|TCP| T
+    WC <-->|WebSocket| W
+    NC <-->|TCP| T
     W -->|Client AI Request| O
     T -->|Client AI Request| O
-    S --> J
     W --> J
+    T --> J
     J --> O
     O -->|AiTask| A
     A -->|Tool Request| O
-    O -->|Server Tool| S
+    O -->|Server Tool| W
+    O -->|Server Tool| T
     A -->|Structured Result / Stream| R
     O -->|Client Tool Dispatch| R
     R --> N
@@ -75,7 +78,7 @@ flowchart TD
 | --- | --- | --- |
 | **AI Orchestrator** | Trigger·Feature Policy, Context Assembly, AiTask, execution correlation, Conversation Metadata, Tool lifecycle, Result Routing coordination | Domain source of truth, realtime connection, LLM prompt와 runtime history |
 | **Omni AI Server** | Workflow·Agent 실행, Prompt, LLM 호출, Tool decision, Conversation History, Runtime State | Messenger topology, 인증 정책, Client session, channel별 전달 |
-| **Realtime Service** | WebSocket/TCP connection, 인증된 session, Connection Registry 등록, Client protocol ingress·delivery | AI 실행 정책, execution lifecycle, Workflow와 LLM 실행 |
+| **Messenger Client Ingress** | `WebSocket Service (WS)`와 `TCP Service (NS)`의 connection/session, 인증된 Client context, 소유한 상태 전이와 Business Event 확정, Client protocol ingress·delivery | Cross-domain AI 기능 실행 정책, execution lifecycle, Workflow와 LLM 실행 |
 
 상세한 전체 책임표와 실행 축은 [Architecture Overview](docs/overview.md)에서 확인할 수 있다.
 
@@ -83,11 +86,11 @@ flowchart TD
 
 ### 1. Business Event와 AiTask를 분리한다
 
-`USER_RETURNED`는 발생한 사실이고, `RETURNED_MESSAGE_TOPICS`는 AI가 수행할 작업이다. Business Event가 발생해도 정책을 통과한 경우에만 AiTask를 생성한다.
+`USER_RETURNED`는 Presence owner가 자신이 소유한 상태를 기준으로 확정한 사실이고, `RETURNED_MESSAGE_TOPICS`는 AI가 수행할 작업이다. AI Orchestrator는 복귀 상태 전이를 재구성하지 않고, source-confirmed Event에 AI 기능 정책을 적용한다. Business Event가 발생해도 정책을 통과한 경우에만 AiTask를 생성한다.
 
 ### 2. Domain과 connection의 Source of Truth를 유지한다
 
-사용자·메시지·파일 상태는 해당 Service가 소유하고, WebSocket/TCP connection은 Realtime Service가 소유한다. AI Orchestrator는 여러 경계를 조정하지만 원본 상태를 복제해 소유하지 않는다.
+사용자·메시지·파일·Presence 상태는 현재 그 기능을 구현한 Messenger Service가 소유한다. WebSocket connection은 `WebSocket Service (WS)`, TCP connection은 `TCP Service (NS)`가 소유한다. AI Orchestrator는 여러 경계를 조정하지만 원본 상태를 복제해 소유하지 않는다.
 
 ### 3. Messenger Application과 AI Runtime을 분리한다
 
@@ -109,7 +112,7 @@ Omni AI Server는 필요한 Tool을 선택하지만 schema validation, permissio
 
 현재 AI Orchestrator에는 다음 흐름이 구현되어 있다.
 
-- Realtime Service가 호출하는 Conversation Start REST API
+- `WebSocket Service (WS)` 또는 `TCP Service (NS)`가 호출하는 Conversation Start REST API
 - 동일 `roomSessionId` 요청의 멱등 처리
 - 같은 사용자·방의 이전 실행 취소와 새 실행 예약
 - 프로세스 내부 Scheduler를 이용한 지연 실행
@@ -125,19 +128,11 @@ Omni AI Server는 필요한 Tool을 선택하지만 schema validation, permissio
 - `tenantId`와 `clientSessionId`를 요청 body가 아닌 검증된 인증 context에서 routingRef에 연결
 - 공통 `AiTask` 및 `triggerId / taskId / executionId` correlation
 - 메모리 Repository와 Scheduler의 durable·distributed 구현
-- REST Result Delivery를 Target Core NATS owner-instance 전달로 교체
+- REST Result Delivery를 계획된 Core NATS owner-instance 전달로 교체
 - 결과 전달 실패 retry와 실행 결과 조회 API
 - Enter Room부터 Client Suggestion까지의 전체 E2E 검증
 
-| Phase | User Outcome | Status |
-| --- | --- | --- |
-| 1. Conversation Start | 방 진입 시 대화 시작 추천 수신 | **In Progress** |
-| 2. Returned Message Topics | 복귀 시 부재중 메시지 Topic Digest 수신 | Planned |
-| 3. Scheduled Weekly Report | 반복 주간보고 요약 예약 수신 | Planned |
-| 4. Server Schedule Intent | Server LLM으로 자연어 Schedule 요청 처리 | Planned |
-| 5. Tool-assisted AI | Tool 기반 검색·판단·초안 생성 | Planned |
-
-상태의 기준 문서는 [Roadmap](docs/roadmap.md)이다. Phase 1의 구현 경계는 [Server Trigger](docs/components/ai-orchestrator/server-trigger.md)에서 실제 코드 구조를 기준으로 기록한다.
+Phase별 상태와 완료 조건의 기준 문서는 [Roadmap](docs/roadmap.md) 한 곳이다. Phase 1의 구현 경계는 [Server Trigger](docs/components/ai-orchestrator/server-trigger.md)에서 실제 코드 구조를 기준으로 기록한다.
 
 ## Documentation
 
@@ -150,16 +145,18 @@ Omni AI Server는 필요한 Tool을 선택하지만 schema validation, permissio
 | 사용자 기능의 End-to-End 흐름 | [Use Cases](docs/use-cases/README.md) |
 | 서비스별 실제 구현 구조 | [Components](docs/components/README.md) |
 | 확정된 설계 결정과 Trade-off | [Architecture Decisions](docs/decisions/README.md) |
+| 공통 메시지·식별자 계약과 확정 상태 | [Common Contracts](docs/contracts/README.md) |
 | Server Business Event 실행 모델 | [Server-driven AI](docs/concepts/server-driven-ai.md) |
 | AiTask, Queue와 routing 계약 | [AiTask and Queue](docs/concepts/ai-task-and-queue.md) |
 | Client Tool과 Context 경계 | [Client Tool Integration](docs/concepts/client-integration.md) |
-| 현재 구조와 장기 service split | [Service Boundary and Migration](docs/concepts/service-boundary-and-migration.md) |
+| 현재 Messenger 서비스 경계와 용어 | [Current Service Boundary](docs/concepts/current-service-boundary.md) |
 
 ```text
 docs/
 ├── overview.md          # 전체 아키텍처의 기준 문서
 ├── roadmap.md           # 구현 순서와 상태의 기준 문서
 ├── concepts/            # 실행 모델과 주요 개념
+├── contracts/           # 공통 메시지·식별자 계약과 확정 상태
 ├── decisions/           # ADR와 결정 요약
 ├── use-cases/           # 사용자 결과 중심의 E2E Vertical Slice
 ├── components/          # 서비스별 공통 구현 책임
@@ -169,7 +166,10 @@ docs/
 ## Documentation Rules
 
 - 시스템 전체 책임과 흐름은 `overview.md`에 기록한다.
+- Business Event의 성립 조건과 source owner의 확정 책임을 AI 기능 실행 정책과 분리해 기록한다.
+- `Trigger Policy`는 source-owned 상태 전이를 재판정하는 규칙이 아니라, 확정된 Event를 AI 기능으로 전환하는 규칙으로 표현한다.
 - 되돌리기 어려운 결정과 대안은 ADR로 기록한다.
+- 공통 메시지와 식별자의 기준 이름·확정 상태는 `contracts/`에서 관리하고, 상세 결정은 연결된 ADR을 참조한다.
 - 기능 고유 흐름, AI 입출력과 완료 조건은 해당 Use Case에 기록한다.
 - 여러 Use Case가 공유하는 구현 구조만 Component 문서에 기록한다.
 - Use Case의 우선순위와 상태는 `roadmap.md`에서 관리한다.

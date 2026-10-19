@@ -7,16 +7,14 @@
 
 ## 1. Purpose
 
-Server-driven AI의 핵심은 AI Runtime이 먼저 기능을 시작하지 않는다는 점이다. Messenger Business Logic과 Business State가 Event와 Context를 평가하고, AI 실행이 필요하다고 판단한 경우에만 AiTask를 만든다.
+Server-driven AI의 핵심은 AI Runtime이 먼저 기능을 시작하지 않는다는 점이다. 현재 source owner는 자신이 소유한 Business State로 Event를 확정하고, AI Orchestrator는 확정된 Event에 AI 기능 정책과 Context를 적용해 `SKIP / EXECUTE`를 판단한다. `EXECUTE`가 확정된 경우에만 AiTask를 만든다.
 
 ```text
 Business Event 또는 Client Request
         ↓
-WebSocket Service / user-service
+Messenger Client Ingress 또는 현재 Business owner
         ↓
-AI Orchestrator
-        ↓
-Business Policy / Trigger Policy
+AI Orchestrator: AI Feature / Trigger Policy
         ↓
 SKIP or EXECUTE
 ```
@@ -43,7 +41,7 @@ Messenger 내부의 Business Event가 AI 실행 후보가 된다.
 ```text
 Business Event
     ↓
-WebSocket Service 또는 user-service
+Messenger Client Ingress 또는 현재 Business owner
     ↓
 NATS JetStream (필요 시)
     ↓
@@ -54,7 +52,7 @@ Feature / Permission / Cooldown / Context Policy
 SKIP or EXECUTE
 ```
 
-WebSocket Service와 user-service는 자신이 소유한 Business Event와 routing context를 제공한다. AI 실행 판단, Trigger Policy, Context Assembly, AiTask 생성은 `AI Orchestrator`에서 공통화한다.
+`Messenger Client Ingress`와 현재 Business owner는 자신이 소유한 상태에서 Business Event의 성립 여부를 판단하고, 그 결과와 trusted routing context를 제공한다. AI Orchestrator는 source-owned 상태 전이를 재구성하지 않는다. 확정된 Event를 특정 AI 기능으로 전환할지에 대한 정책, Context Assembly, AiTask 생성은 `AI Orchestrator`에서 공통화한다.
 
 
 ### Client-explicit path
@@ -111,11 +109,12 @@ Business Event와 AiTask를 분리하면 Event 증가와 AI 기능 증가를 독
 
 ## 4. Service / Orchestrator Boundary
 
-WebSocket Service와 domain service는 connection, session, domain state의 Source of Truth를 유지한다.
+`WebSocket Service (WS)`, `TCP Service (NS)`와 현재 Business owner는 각자 구현한 connection, session, business state의 Source of Truth를 유지한다.
 
 Service 책임:
 
-- Event / Request 해석
+- 소유한 Domain / Presence / Connection 상태의 전이 판단과 Business Event 확정
+- Legacy protocol 값을 Service 경계의 의미로 해석·정규화
 - Authentication / Session / Permission 1차 확인
 - connectionId / roomSessionId / routingRef correlation 제공
 - Domain state 조회 API 또는 Projection 제공
@@ -123,7 +122,8 @@ Service 책임:
 
 `AI Orchestrator` 책임:
 
-- Trigger Policy 판단
+- source-confirmed Event contract 검증
+- Event를 AI 기능으로 전환하는 Trigger Policy 판단
 - 필요한 Business State 조회 조정
 - Context Assembly
 - `SKIP / EXECUTE` 결정
@@ -133,10 +133,11 @@ Service 책임:
 - AI Execution State 관리
 - Conversation Metadata 관리
 - `Omni AI Server` 호출
-- Result Routing / Realtime Target Resolution
+- Result Routing / Realtime Delivery Resolution
 
 `AI Orchestrator`가 가지지 않는 책임:
 
+- Source owner가 소유한 상태 전이와 Business Event 성립 여부 판단
 - 사용자 상태의 Source of Truth
 - 메시지 상태의 Source of Truth
 - 인증 상태의 Source of Truth
@@ -194,15 +195,15 @@ AiTask(CLIENT_REQUESTED_AI)
 ### Returned Message Topics
 
 ```text
-USER_RETURNED
-  ↓
-user-service
-  ↓
-AI Orchestrator REST API (현재)
-  ↓
+Presence owner (current physical component: WebSocket Service (WS) or TCP Service (NS))
+  ├─ 인증된 Desktop / legacy connectType 1, 2 확정
+  ├─ AWAY/OFFLINE → ONLINE 전이 감지
+  ├─ offlineSince / returnedAt / absencePeriodId 확정
+  └─ USER_RETURNED 확정
+  ↓ AI Orchestrator REST API (현재)
 AI Orchestrator
-  ├─ DesktopConnectionPolicy(connectType 1, 2)
-  ├─ AwayDurationPolicy
+  ├─ SourceEventContractValidation
+  ├─ FeatureAwayDurationPolicy
   ├─ ReceivedMessagePolicy
   ├─ DuplicatePeriodPolicy
   └─ PermissionPolicy
@@ -216,11 +217,13 @@ Client confirmation
   └─ YES: AiTask(RETURNED_MESSAGE_TOPICS)
 ```
 
+구 `connectType` 숫자의 의미와 복귀 상태 전이는 Presence owner가 판단한다. AI Orchestrator의 `SourceEventContractValidation`은 신뢰할 수 있는 producer인지, 필수 필드가 존재하는지, 시간 구간이 정합적인지를 확인하는 방어적 검증이지 복귀 사실의 재판정이 아니다. `minAwayDuration`, `maxAbsenceDuration`, `maxLookback`은 Returned Message Topics의 기능별 운영 정책으로 AI Orchestrator가 적용한다.
+
 이 Use Case의 Message Query Port는 현재 Messenger Service가 소유한 내부 DB 조회 Queue를 사용할 수 있다. AI Orchestrator는 조회를 조정하되 쪽지 DB를 직접 읽지 않는다. 사용자 확인 후 AI 실행이 시작되면 최초 selection에 포함된 메시지는 현재 읽음 여부와 관계없이 처리하고, 삭제 여부는 결과 노출 시 Client가 로컬 상태로 판단한다.
 
-현재 Returned Message Topics의 직접 진입점은 WS/NS가 호출하는 AI Orchestrator REST API다. REST retry는 동일한 `triggerId`로 멱등 처리한다. 공통 NATS JetStream 경계는 향후 Trigger 재처리와 durable delivery가 필요할 때 동일한 request 계약을 수용하는 Target adapter다.
+현재 Returned Message Topics의 직접 진입점은 `WebSocket Service (WS)` 또는 `TCP Service (NS)`가 호출하는 AI Orchestrator REST API다. REST retry는 동일한 `triggerId`로 멱등 처리한다. NATS JetStream adapter는 Trigger 재처리와 durable delivery를 이 프로젝트 범위에서 도입할 때 동일한 request 계약을 사용한다.
 
-확인 팝업과 결과는 모든 사용자 connection에 broadcast하지 않는다. Realtime/Messenger 경계가 검증한 요청 Desktop connection의 `connectType`을 trusted `routingRef.connectionType`에 저장하고, Result Router가 같은 connection type의 현재 owner를 선택한다.
+확인 팝업과 결과는 모든 사용자 connection에 broadcast하지 않는다. Messenger Client Ingress가 검증한 요청 Desktop connection의 `connectType`을 trusted `routingRef.connectionType`에 저장하고, Result Router가 같은 connection type의 현재 owner를 선택한다.
 
 
 ### Label Multimodal Action
@@ -228,7 +231,7 @@ Client confirmation
 ```text
 Label Matched
   ↓
-user-service
+Current Label owner
   ↓
 AI Orchestrator
   ↓
@@ -247,22 +250,18 @@ AiTask(LABEL_MULTIMODAL_ACTION)
 ```text
 USER_ONLINE
   ↓
-user-service
-  ↓
-previousOfflineAt 조회
-  ↓
-awayDuration 계산
-  ↓
-AI Trigger 발행
+Presence owner
+  ├─ previousOfflineAt 조회
+  ├─ offlineSince / returnedAt / absencePeriodId 확정
+  └─ USER_RETURNED 발행
   ↓
 AI Orchestrator
-  ↓
-Policy
+  ↓ Feature-specific duration / expiration / duplicate policy
   ↓
 AiTask
 ```
 
-Target Architecture에서 여러 Service의 상태를 조합하거나 재처리가 필요한 Trigger는 NATS JetStream을 통해 `AI Orchestrator`로 전달할 수 있다. 현재 Returned Message Topics는 위에서 설명한 REST API 경로를 사용하며 아래 흐름은 JetStream adapter가 도입된 이후의 목표 구조다.
+여러 현재 Messenger 책임의 상태를 조합하거나 재처리가 필요한 Trigger는 NATS JetStream을 통해 `AI Orchestrator`로 전달할 수 있다. 현재 Returned Message Topics는 위에서 설명한 REST API 경로를 사용하며, JetStream adapter는 이 프로젝트에서 durable Trigger를 구현할 때 적용한다.
 
 ```text
 USER_RETURNED
@@ -289,7 +288,7 @@ Business Policy와 Trigger Policy는 `Omni AI Server` 호출 이전에 끝난다
 - Permission
 - Cooldown
 - Today Hidden
-- User State
+- source-confirmed User State를 사용하는 AI 기능 조건
 - Room / Label / Business State
 - File Access
 - Client Context Scope
@@ -311,7 +310,7 @@ Execution Policy는 실행 안정성을 다룬다.
 
 `AI Orchestrator`가 모든 Service를 매번 동기 RPC로 호출하는 synchronous fan-out 구조는 지양한다.
 
-각 Domain Service가 소유한 AI Context는 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 조회한다. 일정 수준의 stale을 허용할 수 있는 Context도 `AI Orchestrator`가 Domain DB / Redis를 직접 읽는 방식이 아니라, Service가 제공하는 read API나 event-driven Projection으로 제공하는 방향을 우선한다.
+현재 Business owner가 소유한 AI Context는 명시적인 API / gRPC 또는 계약된 Projection을 통해 조회한다. 일정 수준의 stale을 허용할 수 있는 Context도 `AI Orchestrator`가 해당 owner의 DB / Redis를 직접 읽는 방식이 아니라, owner가 제공하는 read API나 event-driven Projection으로 제공하는 방향을 우선한다.
 
 예:
 
@@ -336,7 +335,7 @@ Execution Policy는 실행 안정성을 다룬다.
 원칙:
 
 ```text
-WebSocket Service / user-service / auth-service / file-service
+WebSocket Service (WS) / TCP Service (NS) / current Business owner
 = Source of Truth
 
 AI Orchestrator

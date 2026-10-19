@@ -10,7 +10,7 @@ Omni AI는 Workflow / Agent execution 중 server tool과 client tool을 모두 �
 
 ```text
 Server Tool
-Omni AI Server → AI Orchestrator → Business Services
+Omni AI Server → AI Orchestrator → 현재 Business owner
 
 Client Tool
 Omni AI Server → WebSocket Service → Client
@@ -32,21 +32,21 @@ Tool Lifecycle
 = AI Orchestrator Tool Runtime
 
 Server Tool Dispatch
-= AI Orchestrator Tool Runtime → Server Tool Adapter → target service
+= AI Orchestrator Tool Runtime → Server Tool Adapter → 현재 Business owner
 
 Client Tool Dispatch
-= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회 → Core NATS owner-instance subject → Realtime Service → local connection → Client
+= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회 → Core NATS owner-instance subject → Messenger Client Ingress의 현재 connection owner → local connection → Client
 
 Client Tool Result
-= Client → Realtime Service → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
+= Client → WebSocket Service (WS) 또는 TCP Service (NS) → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
 ```
 
-초기에는 `AI Orchestrator` 내부 모듈인 `Result Router`가 전역 routingRef를 해석하고 Realtime Connection Registry에서 현재 ownerInstanceId를 조회해 Core NATS owner-instance subject를 선택한다. `WebSocket Service` 또는 `TCP Realtime Service`는 선택된 instance에서 local session lookup, client protocol delivery, client result ingress를 담당한다. Realtime Service는 Client Tool lifecycle의 source of truth가 아니다.
+초기에는 `AI Orchestrator` 내부 모듈인 `Result Router`가 전역 routingRef를 해석하고 Realtime Connection Registry에서 현재 ownerInstanceId를 조회해 Core NATS owner-instance subject를 선택한다. `WebSocket Service (WS)` 또는 `TCP Service (NS)`는 선택된 instance에서 local session lookup, client protocol delivery, client result ingress를 담당한다. `Messenger Client Ingress`는 Client Tool lifecycle의 source of truth가 아니다.
 
 LLM token stream과 execution progress stream은 Tool Runtime을 token-by-token 경유하지 않는다.
 
 ```text
-Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS owner-instance subject → Realtime Service → Client
+Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS owner-instance subject → Messenger Client Ingress의 현재 connection owner → Client
 ```
 
 ## Alternatives

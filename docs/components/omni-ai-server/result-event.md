@@ -9,6 +9,7 @@ Status: Planned
 Omni AI Server가 Workflow / Agent 실행 결과를 channel-independent `ResultEvent`로 생성하는 구현 책임을 정의한다.
 
 공통 이벤트 계약과 전체 전달 흐름은 [ADR 001](../../decisions/001-session-registry-result-routing.md)을 따른다.
+필드 이름과 계약 확정 상태의 빠른 기준은 [Common Contracts](../../contracts/README.md)에서 확인한다.
 
 ---
 
@@ -37,6 +38,7 @@ ResultEvent
   eventId
   eventType
   sequence (stream인 경우)
+  routingRef (선택, non-authoritative snapshot)
   payload
 ```
 
@@ -44,6 +46,7 @@ ResultEvent
 - `eventId`: 중복 Event 제거를 위한 고유 ID
 - `eventType`: progress, stream, completed, failed 등 Event 의미
 - `sequence`: 동일 execution의 stream ordering 검증에 사용
+- `routingRef`: 전달되는 경우에도 routing 권한의 근거로 사용하지 않는 선택적 snapshot
 - `payload`: Workflow별 structured result 또는 stream fragment
 
 Omni AI Server가 `routingRef`를 transport 과정에서 echo할 수는 있지만, Result Router는 이를 authoritative routing 정보로 사용하지 않고 `executionId`로 trusted `routingRef`를 다시 조회한다.
@@ -89,4 +92,4 @@ Stream ordering이 필요한 Workflow는 execution 단위로 증가하는 `seque
 
 - [ADR 001. Session Registry Based AI Result Routing](../../decisions/001-session-registry-result-routing.md)
 - [AI Orchestrator Result Router](../ai-orchestrator/result-router.md)
-- [Realtime Service Result Delivery](../realtime-service/result-delivery.md)
+- [Messenger Client Ingress Result Delivery](../messenger-client-ingress/result-delivery.md)

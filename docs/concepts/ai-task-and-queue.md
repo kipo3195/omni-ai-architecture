@@ -11,6 +11,8 @@ AiTask는 AI 실행이 확정된 작업을 표현하는 공통 실행 단위이�
 
 Business Event나 Client Request가 "무슨 일이 들어왔는가"를 나타낸다면, AiTask는 "AI가 무엇을 실행해야 하는가"를 나타낸다.
 
+현재 공통 `AiTask` schema는 Draft이며, 식별자 분리는 ADR 004가 `Proposed` 상태다. 계약 확정 상태는 [Common Contracts](../contracts/README.md)를 기준으로 확인한다.
+
 
 ---
 
@@ -68,7 +70,7 @@ AiTask
   - raw file content
 ```
 
-대용량 Context는 AiTask payload에 직접 싣지 않고 Context Store, Service API / gRPC, 또는 명시적으로 계약된 Projection에서 조회하는 방향으로 둔다. Domain Service가 소유한 DB / Redis를 `AI Orchestrator`가 직접 읽는 방식은 기본 전략으로 두지 않는다.
+대용량 Context는 AiTask payload에 직접 싣지 않고 Context Store, 현재 Business owner가 제공하는 API / gRPC, 또는 명시적으로 계약된 Projection에서 조회하는 방향으로 둔다. 현재 Business owner가 소유한 DB / Redis를 `AI Orchestrator`가 직접 읽는 방식은 기본 전략으로 두지 않는다.
 
 
 ---
@@ -262,7 +264,7 @@ Registry는 다음 책임을 가진다.
 
 `ownerInstanceId`는 Result 전달 시점의 현재 WebSocket owner이다. `sourceInstanceId`는 Trigger를 발행하거나 Request를 처리한 instance correlation 정보일 뿐 최종 delivery source of truth가 아니다.
 
-공통 routing 계약은 [Session Registry Based AI Result Routing](../decisions/001-session-registry-result-routing.md)에서 관리하고, 구현 상세는 [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)와 [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)에서 관리한다.
+공통 routing 계약은 [Session Registry Based AI Result Routing](../decisions/001-session-registry-result-routing.md)에서 관리하고, 구현 상세는 [Messenger Client Ingress Result Delivery](../components/messenger-client-ingress/result-delivery.md)와 [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)에서 관리한다.
 
 
 ---
@@ -329,7 +331,7 @@ AI Task는 `triggerId` / `taskId` / `executionId`로 처리하고, Client delive
 
 ---
 
-## 11. Server-triggered Target Resolution
+## 11. Server-triggered Delivery Resolution
 
 Server-triggered AI 기능도 명확한 target client resolution을 거쳐야 한다.
 
@@ -418,7 +420,7 @@ Result Routing 단계:
 3. routingRef의 target reference와 선택적인 Use Case scope reference로 Realtime Connection Registry 조회
 4. 현재 ownerInstanceId 확인
 5. routingRef.connectionType이 있으면 connection record와 일치 여부 확인
-6. 해당 ownerInstanceId의 Realtime Service instance subject로 Core NATS publish
+6. 해당 ownerInstanceId를 소유한 `WebSocket Service (WS)` 또는 `TCP Service (NS)` instance subject로 Core NATS publish
 7. 해당 instance가 자신이 소유한 local WebSocket 또는 TCP session으로 최종 전송
 ```
 
@@ -436,9 +438,13 @@ LLM Stream을 `AI Orchestrator`가 token-by-token proxy하지 않는 방향을 �
 ```text
 Omni AI Server
   ↓
+Result Router
+  ↓
+Realtime Connection Registry에서 current owner resolve
+  ↓
 Core NATS
   ↓
-WebSocket Service
+Messenger Client Ingress의 현재 connection owner
   ↓
 Client
 ```
@@ -454,16 +460,18 @@ COMPLETED
 FAILED
 ```
 
-공통 필드 후보:
+공통 envelope은 ADR 001의 `ResultEvent`를 사용한다.
 
 ```text
 executionId
-conversationId
-type
+eventId
+eventType
 sequence
-content
-metadata
+routingRef (선택, non-authoritative snapshot)
+payload
 ```
+
+`conversationId`, token `content`와 표시용 `metadata`가 필요하면 공통 필드와 경쟁하는 별도 최상위 필드가 아니라 Workflow별 `payload` 안에 둔다. 기준 계약은 [Common Contracts](../contracts/README.md)에서 관리한다.
 
 Stream Event는 Client UX를 위한 token delta 또는 execution progress event다. Tool lifecycle의 source of truth로 사용하지 않는다.
 

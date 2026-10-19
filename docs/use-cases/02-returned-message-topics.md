@@ -6,27 +6,33 @@ Desktop Client 사용자가 일정 시간 이상 자리비운 뒤 온라인으�
 
 ## Trigger
 
-- 적용 대상은 `clientPlatform = DESKTOP`이면서 현재 Messenger 계약의 `connectType`이 `1` 또는 `2`인 연결이다.
-- 대상 연결의 사용자 상태가 `AWAY/OFFLINE → ONLINE`으로 변경되면 복귀 후보가 된다.
-- 자리비움 시간이 `minAwayDuration` 이상이어야 한다. 초기 정책값 후보는 15분이다.
-- `maxAbsenceDuration`, `maxLookback`, Trigger expiration을 넘긴 장기 부재는 실행하지 않거나 제한된 조회 구간만 사용한다.
+- Presence owner는 인증된 connection context에서 `clientPlatform = DESKTOP`이고 현재 Messenger 계약의 `connectType`이 `1` 또는 `2`인지 확인한다. 다른 연결은 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
+- Presence owner는 대상 연결의 `AWAY/OFFLINE → ONLINE` 상태 전이를 감지하고 `offlineSince`, `returnedAt`, `absencePeriodId`를 확정한다. 이 조건이 성립한 경우에만 `USER_RETURNED`를 생성한다.
+- AI Orchestrator는 확정된 복귀 사실을 재판정하지 않고, Returned Message Topics의 기능별 정책을 적용한다. 자리비움 시간은 `minAwayDuration` 이상이어야 하며 초기 정책값 후보는 15분이다.
+- `maxAbsenceDuration`, `maxLookback`, Trigger expiration을 넘긴 장기 부재는 AI Orchestrator가 실행하지 않거나 제한된 조회 구간만 사용한다.
 - 복귀 구간에 읽지 않은 수신 쪽지가 없으면 사용자 확인과 AI 실행을 모두 생략한다.
 - 다른 `connectType`의 단순 연결 시도 시각은 메시지를 확인했다는 근거로 사용하지 않는다. 향후 명시적인 메시지함 열람 또는 동기화 이벤트가 생기면 별도 정책으로 검토한다.
 
-`connectType` 숫자값은 현재 Desktop Client와 Messenger 사이의 legacy 계약이다. AI Orchestrator와 Omni AI Server가 이 숫자의 의미를 해석하지 않으며, Realtime/Messenger 경계가 검증한 값을 Trigger와 `routingRef`에 제공한다.
+`connectType` 숫자값은 현재 Desktop Client와 Messenger 사이의 legacy 계약이다. AI Orchestrator와 Omni AI Server가 이 숫자의 의미를 해석하지 않으며, Messenger Client Ingress가 이 Use Case의 적용 대상인지 판단한 뒤 검증한 값을 Trigger와 `routingRef`에 제공한다. Orchestrator의 후속 `connectionType` 확인은 복귀 사실을 재판정하는 정책이 아니라 다른 종류의 connection으로 잘못 전달하지 않기 위한 routing constraint 검증이다.
 
-이 문서의 `WS/NS`는 현재 Desktop connection과 상태 변경을 처리하는 배포 컴포넌트를 가리킨다. 공통 아키텍처에서는 두 컴포넌트를 `Realtime/Messenger Service` 경계로 표현하며, 물리적 서비스 분리는 이 Use Case의 범위에 포함하지 않는다.
+이 문서에서 `WS`는 `WebSocket Service`, `NS`는 `TCP Service`를 의미한다. 두 물리 서비스를 포괄하는 논리적 경계는 `Messenger Client Ingress`다.
 
 ## End-to-End Flow
 
 ```text
 Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
-→ Presence owner: offlineSince / returnedAt / absencePeriodId 확정
-→ WS/NS가 AI Orchestrator REST API 호출
+→ Presence owner
+  - 인증된 Desktop / connectType 자격 확인
+  - 상태 전이 감지
+  - offlineSince / returnedAt / absencePeriodId 확정
+  - USER_RETURNED 확정
+→ WebSocket Service (WS) 또는 TCP Service (NS)가 AI Orchestrator REST API 호출
   - USER_RETURNED request
   - absence period
   - trusted routingRef
-→ AI Orchestrator: 기능·사용자·부재 시간·만료·중복 정책 확인
+→ AI Orchestrator
+  - source event contract 검증(복귀 사실은 재판정하지 않음)
+  - 기능·사용자·부재 시간·만료·중복 정책 확인
 → Message Query Port
 → 현재 메시지 조회 책임 Service의 내부 DB 조회 Queue
 → 복귀 구간의 unread count와 messageSelectionRef 반환
@@ -39,30 +45,32 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
 → Omni AI Server: Topic Extraction + Priority
 → AI Orchestrator Result Router
 → routingRef와 동일한 connectionType의 현재 connection owner resolve
-→ Realtime Service
+→ Messenger Client Ingress의 현재 connection owner
 → Client Topic Digest
 → Client가 로컬 삭제 상태를 반영해 최종 노출
 ```
 
-현재 Messenger 구조에서는 쪽지 DB 조회 Queue와 조회 로직을 해당 Service가 소유한다. AI Orchestrator는 조회를 조정하는 Port만 사용하고 쪽지 DB를 직접 조회하지 않는다. 향후 Message Service가 분리되면 이 Port의 adapter를 Service API, gRPC 또는 명시적으로 계약된 Projection으로 교체한다.
+현재 Messenger 구조에서는 쪽지 DB 조회 Queue와 조회 로직을 해당 구현을 보유한 Messenger Service가 소유한다. AI Orchestrator는 조회를 조정하는 Message Query Port만 사용하고 쪽지 DB를 직접 조회하지 않는다.
 
-현재는 NATS JetStream Trigger Consumer가 구현되어 있지 않으므로 WS/NS가 공통 AI Orchestrator REST API를 호출한다. WS/NS별 AI Trigger Queue는 만들지 않는다. 향후 Trigger 재처리와 durable delivery가 필요해지면 동일한 request 계약을 NATS JetStream adapter로 확장할 수 있지만, 이는 현재 흐름에 포함하지 않는다.
+현재는 NATS JetStream Trigger Consumer가 구현되어 있지 않으므로 `WebSocket Service (WS)` 또는 `TCP Service (NS)`가 공통 AI Orchestrator REST API를 호출한다. 서비스별 AI Trigger Queue는 만들지 않는다. Trigger 재처리와 durable delivery를 이 프로젝트에서 도입할 때는 동일한 request 계약을 NATS JetStream adapter로 확장한다.
 
 ## Responsibility
 
 | Component | Responsibility |
 | --- | --- |
-| WS/NS 또는 Presence owner | Desktop `connectType 1, 2`의 상태 변경 감지, 자리비움 구간 확정, 검증된 connection context 제공 |
+| Presence owner inside Messenger Client Ingress | 인증된 Desktop `connectType 1, 2` 적용 대상 판단, `AWAY/OFFLINE → ONLINE` 전이 감지, 자리비움 구간과 `USER_RETURNED` 확정, trusted connection context 제공 |
 | 현재 Message owner | 내부 DB 조회 Queue를 통한 unread count, 후보 메시지 선정과 AI Context 제공 |
-| AI Orchestrator | 정책 평가, 사용자 확인 lifecycle, Context Assembly, 중복 방지, AiTask와 실행 이력 관리 |
+| AI Orchestrator | source event contract 검증, 기능별 실행 정책 평가, 사용자 확인 lifecycle, Context Assembly, 중복 방지, AiTask와 실행 이력 관리. Presence 상태 전이는 재판정하지 않음 |
 | Omni AI Server | 선정된 메시지의 발신자·업무 주제·우선순위 추출 |
 | Result Router | trusted `routingRef` 검증, 동일 connectionType의 현재 connection owner 선택 |
-| Realtime Service | 확인 팝업과 Topic Digest를 선택된 local connection에 전달 |
+| Messenger Client Ingress | 확인 팝업과 Topic Digest를 선택된 WebSocket 또는 TCP local connection에 전달 |
 | Client | 사용자 동의 입력, 로컬에서 삭제된 원본을 제외한 최종 결과 노출 |
 
 ## Contracts
 
 ### USER_RETURNED REST Request
+
+이 요청은 Presence owner가 적용 대상 connection과 복귀 상태 전이를 확정한 뒤 생성하는 source-qualified Event다. AI Orchestrator는 Client가 보낸 원시 상태나 legacy `connectType`으로 복귀 여부를 다시 계산하지 않는다.
 
 ```text
 requestId
@@ -82,7 +90,7 @@ routingRef
   connectionType: 1 | 2
 ```
 
-`routingRef.connectionType`은 Client request payload를 그대로 신뢰하지 않고 WS/NS 또는 Realtime Service가 인증된 connection context에서 설정한다. Result Router는 target reference로 현재 connection을 찾은 뒤 Connection Registry의 `connectionType`이 이 값과 일치하는지 검증한다.
+`routingRef.connectionType`은 Client request payload를 그대로 신뢰하지 않고 Messenger Client Ingress가 인증된 connection context에서 설정한다. Result Router는 target reference로 현재 connection을 찾은 뒤 Connection Registry의 `connectionType`이 이 값과 일치하는지 검증한다.
 
 ### Message Query Result
 
@@ -156,8 +164,8 @@ TopicDigestResult
 
 AI Orchestrator는 Omni AI Server 호출 전에 다음 정책을 평가한다.
 
-- `DesktopConnectionPolicy`: Desktop이며 `connectType in {1, 2}`인지 확인
-- `AwayDurationPolicy`: `minAwayDuration` 이상인지 확인
+- `SourceEventContractValidation`: trusted Presence owner가 생성한 Event인지, 필수 필드와 시간 구간이 정합적인지 확인. Desktop/connectType 의미나 상태 전이를 재판정하지 않음
+- `FeatureAwayDurationPolicy`: Returned Message Topics의 `minAwayDuration` 이상인지 확인
 - `LongAbsencePolicy`: `maxAbsenceDuration` 또는 `maxLookback` 적용
 - `Feature/User/PermissionPolicy`: 기능과 사용자 설정 확인
 - `UnreadMessagePolicy`: 초기 선정 시 unread 메시지가 하나 이상인지 확인
@@ -213,7 +221,7 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 확인 팝업과 AI 결과는 모든 사용자 연결에 broadcast하지 않는다. `routingRef`에 담긴 논리 target과 `connectionType`을 사용해 요청한 Desktop Client와 같은 타입의 현재 connection으로 전달한다.
 
 - 현재 구현: Result Router가 Redis에서 현재 connection owner를 조회하고 해당 instance REST endpoint로 전달
-- Target Architecture: 같은 resolution 이후 Core NATS owner-instance subject로 전달
+- 계획된 경로: 같은 resolution 이후 Core NATS owner-instance subject로 전달
 - Result 처리 시점에 현재 owner를 다시 조회하며 Trigger source instance를 최종 target으로 사용하지 않는다.
 - targetRef는 인증 session 또는 device 같은 논리 target을 식별하고, `connectionType`은 선택된 connection에 대한 추가 검증 조건이다.
 
@@ -228,7 +236,7 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ## Scope
 
-- Desktop `connectType 1, 2`의 복귀 감지
+- Presence owner의 Desktop `connectType 1, 2` 적용 대상 판단과 복귀 Event 확정
 - 자리비움 구간과 장기 부재 정책
 - 현재 Service의 DB 조회 Queue를 이용한 unread 후보 선정
 - 사용자 확인 후 AI 실행
@@ -243,11 +251,12 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 - 전체 대화 요약
 - 사용자가 정의한 반복 Schedule
 - Tool Calling
-- Message Service 물리 분리
+- 현재 Messenger 서비스의 물리적 분리·통합
 
 ## Acceptance Criteria
 
-- Desktop `connectType 1, 2` 이외의 복귀는 이 기능을 시작하지 않는다.
+- Presence owner는 Desktop `connectType 1, 2` 이외의 연결에서 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
+- Orchestrator는 source-confirmed `USER_RETURNED`를 상태 원시값으로 재판정하지 않는다.
 - `minAwayDuration` 미만이거나 장기 부재/만료 정책에 걸리면 실행하지 않는다.
 - 대상 unread 메시지가 없으면 확인 팝업과 LLM 호출을 수행하지 않는다.
 - 사용자가 `YES`를 선택하기 전에는 LLM을 호출하지 않는다.
@@ -261,7 +270,7 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ## Current Implementation Gap
 
-Desktop 복귀 감지와 자리비움 구간 관리, USER_RETURNED REST endpoint, DB 조회 Queue adapter를 연결한 Message Query Port, 사용자 확인 lifecycle, Topic Extraction/우선순위 Workflow와 connectionType 검증을 포함한 결과 전달이 아직 구현되지 않았다. NATS JetStream Trigger Consumer는 현재 구현 범위가 아니다.
+Presence owner의 Desktop connection 적용 대상 판단, 복귀 Event 확정과 자리비움 구간 관리, USER_RETURNED REST endpoint, DB 조회 Queue adapter를 연결한 Message Query Port, 사용자 확인 lifecycle, Topic Extraction/우선순위 Workflow와 connectionType 검증을 포함한 결과 전달이 아직 구현되지 않았다. NATS JetStream Trigger Consumer는 현재 구현 범위가 아니다.
 
 ## Open Questions
 
@@ -277,4 +286,4 @@ Desktop 복귀 감지와 자리비움 구간 관리, USER_RETURNED REST endpoint
 - [Server Trigger](../components/ai-orchestrator/server-trigger.md)
 - [Server-driven AI](../concepts/server-driven-ai.md)
 - [Session Registry Based AI Result Routing](../decisions/001-session-registry-result-routing.md)
-- [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)
+- [Messenger Client Ingress Result Delivery](../components/messenger-client-ingress/result-delivery.md)

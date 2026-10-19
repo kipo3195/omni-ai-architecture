@@ -1,4 +1,4 @@
-# Realtime Service Result Delivery
+# Messenger Client Ingress Result Delivery
 
 Status: In Progress
 
@@ -6,17 +6,17 @@ Status: In Progress
 
 ## Purpose
 
-Realtime Service가 여러 instance로 실행되는 환경에서 Client connection의 현재 owner를 등록하고, AI Orchestrator가 선택한 delivery event를 정확한 local connection으로 전달하는 구현 책임을 정의한다.
+`WebSocket Service (WS)`와 `TCP Service (NS)`가 여러 instance로 실행되는 환경에서 Client connection의 현재 owner를 등록하고, AI Orchestrator가 선택한 delivery event를 정확한 local connection으로 전달하는 Messenger Client Ingress의 구현 책임을 정의한다.
 
-공통 `routingRef`, `ResultEvent`, `DeliveryEvent` 계약과 End-to-End 흐름은 [ADR 001](../../decisions/001-session-registry-result-routing.md)을 따른다. WebSocket Realtime Service MVP의 인증 세션 기반 target과 단일 활성 connection 정책은 [ADR 005](../../decisions/005-websocket-realtime-client-session-result-routing.md)를 따른다.
+공통 `routingRef`, `ResultEvent`, `DeliveryEvent` 계약과 End-to-End 흐름은 [ADR 001](../../decisions/001-session-registry-result-routing.md)을 따른다. WebSocket Service MVP의 인증 세션 기반 target과 단일 활성 connection 정책은 [ADR 005](../../decisions/005-websocket-realtime-client-session-result-routing.md)를 따른다.
 
-현재 AI Orchestrator에는 Redis current-owner 조회와 owner instance REST endpoint 호출이 구현되어 있다. 이 문서가 정의하는 Realtime Service의 registry 등록, REST event 수신과 local Client delivery는 최종 End-to-End 검증이 남아 있다. Core NATS delivery는 Target Architecture다.
+현재 AI Orchestrator에는 Redis current-owner 조회와 owner instance REST endpoint 호출이 구현되어 있다. 이 문서가 정의하는 Messenger Client Ingress의 registry 등록, REST event 수신과 local Client delivery는 최종 End-to-End 검증이 남아 있다. Core NATS delivery는 이 프로젝트의 계획된 result delivery 경로다.
 
 ---
 
 ## Connection Registry
 
-WebSocket Realtime Service MVP는 인증된 로그인 세션별 단일 활성 connection을 유지한다.
+WebSocket Service MVP는 인증된 로그인 세션별 단일 활성 connection을 유지한다.
 
 ```text
 rt:client-session-current:{tenantId}:{userId}:{clientSessionId}
@@ -43,17 +43,17 @@ rt:connection:{tenantId}:{connectionId}
 
 Native 또는 TCP Client가 안정적인 설치나 장치 식별자를 제공하면 별도의 `rt:device-current:{tenantId}:{userId}:{deviceId}` pointer와 `DEVICE_CURRENT` target을 사용할 수 있다. `deviceId`와 `clientSessionId` 모두 connection ID가 아니라 현재 `connectionId`를 찾기 위한 논리적 pointer다.
 
-WebSocket Realtime Service MVP는 동일 `clientSessionId`에 여러 활성 connection을 허용하지 않는다. 향후 복수 connection 또는 복수 channel의 동시 연결을 허용하면 단일 pointer 대신 connection set이나 연결별 `connectionToken`을 도입하고 명시적인 target-selection policy를 적용한다.
+WebSocket Service MVP는 동일 `clientSessionId`에 여러 활성 connection을 허용하지 않는다. 복수 connection 또는 복수 channel을 이 프로젝트에서 지원하게 되면 단일 pointer 대신 connection set이나 연결별 `connectionToken`을 도입하고 명시적인 target-selection policy를 적용한다.
 
 ---
 
 ## Authentication Session Contract
 
-WebSocket Realtime Service Client의 로그인과 token refresh 계약은 다음과 같다.
+WebSocket Service Client의 로그인과 token refresh 계약은 다음과 같다.
 
 ```text
 REST Login
-→ 인증 서버가 clientSessionId 생성
+→ 현재 인증 흐름이 clientSessionId 생성
 → JWT 발급
   - tenantId
   - userId
@@ -72,7 +72,7 @@ New Login Session
 
 `sid`는 access token 자체나 token별 `jti`와 구분한다. `jti`는 token 재발급 때 변경될 수 있으므로 current connection pointer로 사용하지 않는다.
 
-REST와 WebSocket 요청을 처리하는 Realtime Service는 JWT의 서명, 만료, issuer, audience를 검증한 뒤 `tenantId`, `userId`, `sid`를 추출한다. Client가 별도 header, request body 또는 WebSocket message로 보낸 `clientSessionId`를 routing 권한의 근거로 사용하지 않는다.
+REST와 WebSocket 요청을 처리하는 WebSocket Service는 JWT의 서명, 만료, issuer, audience를 검증한 뒤 `tenantId`, `userId`, `sid`를 추출한다. Client가 별도 header, request body 또는 WebSocket message로 보낸 `clientSessionId`를 routing 권한의 근거로 사용하지 않는다.
 
 로그아웃, 인증 세션 만료 또는 강제 session revocation 시 해당 `clientSessionId`의 current pointer와 활성 connection을 무효화한다. WebSocket을 JWT 만료 시점에 종료할지, 재인증을 요구할지는 Authentication 정책과 함께 정하되 Registry 상태와 불일치하지 않게 처리한다.
 
@@ -136,15 +136,15 @@ REST 요청은 Load Balancer에 의해 connection owner가 아닌 instance로 �
 ```text
 Client REST Request
   - Authorization: Bearer <JWT>
-→ 임의의 Realtime Service instance
+→ 임의의 WebSocket Service instance
 → JWT 검증 후 tenantId / userId / sid 추출
 → Connection Registry에서 current connectionId resolve
 → AI Orchestrator 호출
 ```
 
-WebSocket Realtime Service MVP의 단일 활성 connection 정책은 `tenantId + userId + clientSessionId`로 조회한다. Realtime Service는 검증된 JWT의 `sid`로 `clientSessionId`를 구성하므로 Client가 별도 routing ID를 전달할 필요가 없다.
+WebSocket Service MVP의 단일 활성 connection 정책은 `tenantId + userId + clientSessionId`로 조회한다. WebSocket Service는 검증된 JWT의 `sid`로 `clientSessionId`를 구성하므로 Client가 별도 routing ID를 전달할 필요가 없다.
 
-현재 인증 세션의 connection으로 결과를 전달하는 요청은 Realtime Service가 다음 `routingRef`를 구성해 AI Orchestrator에 전달한다.
+현재 인증 세션의 connection으로 결과를 전달하는 요청은 WebSocket Service가 다음 `routingRef`를 구성해 AI Orchestrator에 전달한다.
 
 ```text
 routingRef
@@ -157,7 +157,7 @@ routingRef
   scopeRef (필요 시)
 ```
 
-Realtime Service는 현재 `ownerInstanceId`를 최종 routing 값으로 확정해 전달하지 않는다. 요청 시점의 connection 조회는 인증과 요청 검증에 사용하고, 최종 owner는 AI Orchestrator가 Result 전달 시점에 Registry에서 다시 조회한다. 로그인 세션 경계를 유지하기 때문에 기존 세션에서 시작한 Result를 로그아웃 후 생성된 다른 `clientSessionId`로 자동 전달하지 않는다. `connectionType`이 필요한 Use Case에서는 Client가 보낸 원시값이 아니라 인증된 local connection context의 값을 `routingRef`에 넣는다.
+Messenger Client Ingress는 현재 `ownerInstanceId`를 최종 routing 값으로 확정해 전달하지 않는다. 요청 시점의 connection 조회는 인증과 요청 검증에 사용하고, 최종 owner는 AI Orchestrator가 Result 전달 시점에 Registry에서 다시 조회한다. 로그인 세션 경계를 유지하기 때문에 기존 세션에서 시작한 Result를 로그아웃 후 생성된 다른 `clientSessionId`로 자동 전달하지 않는다. `connectionType`이 필요한 Use Case에서는 Client가 보낸 원시값이 아니라 인증된 local connection context의 값을 `routingRef`에 넣는다.
 
 Connection-bound Event라면 `targetRef.type`을 `CONNECTION`으로 설정하고 검증된 `connectionId`를 전달한다. 향후 요청한 exact connection을 지정해야 한다면 WebSocket 연결별 짧은 수명의 opaque `connectionToken`을 발급하고 REST 요청에서 검증하는 정책을 추가한다.
 
@@ -167,7 +167,7 @@ AI Event별 `scopeRef`가 필요하다면 해당 Use Case owner가 생성하거�
 
 ## Local Delivery
 
-Realtime Service는 instance subject에서 받은 `DeliveryEvent.connectionId`로 local connection을 찾는다.
+선택된 `WebSocket Service (WS)` 또는 `TCP Service (NS)` instance는 instance subject에서 받은 `DeliveryEvent.connectionId`로 local connection을 찾는다.
 
 ```text
 1. exact connectionId local lookup
@@ -184,6 +184,6 @@ Realtime Service는 instance subject에서 받은 `DeliveryEvent.connectionId`�
 ## Related
 
 - [ADR 001. Session Registry Based AI Result Routing](../../decisions/001-session-registry-result-routing.md)
-- [ADR 005. WebSocket Realtime Service Result Routing by Authenticated Client Session](../../decisions/005-websocket-realtime-client-session-result-routing.md)
+- [ADR 005. WebSocket Service Result Routing by Authenticated Client Session](../../decisions/005-websocket-realtime-client-session-result-routing.md)
 - [AI Orchestrator Result Router](../ai-orchestrator/result-router.md)
 - [Omni AI Server Result Event](../omni-ai-server/result-event.md)

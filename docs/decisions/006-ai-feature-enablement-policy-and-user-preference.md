@@ -32,10 +32,10 @@ DB
 
 각 instance가 독립적으로 갱신하므로 설정은 refresh interval 내에 순차적으로 반영될 수 있다. 최초 DB 로딩에 실패하면 기본값을 OFF로 두고 AI 실행을 차단한다. 정상 로딩 이후 refresh가 실패하면 실패한 값으로 덮어쓰지 않고 마지막으로 정상 로딩한 값을 유지한다.
 
-User Policy는 Realtime Service가 설정 변경 API와 DB 저장을 담당하고, DB commit 이후 Redis cache를 갱신한다. AI Orchestrator는 사용자별 설정이 필요할 때 Redis를 조회하고, cache miss 시 DB에서 읽어 Redis에 적재한다. Cache에는 TTL을 적용한다.
+User Policy는 현재 사용자 설정 Business Logic을 소유한 Messenger Service가 설정 변경 API와 DB 저장을 담당하고, DB commit 이후 Redis cache를 갱신한다. AI Orchestrator는 사용자별 설정이 필요할 때 Redis를 조회하고, cache miss 시 DB에서 읽어 Redis에 적재한다. Cache에는 TTL을 적용한다.
 
 ```text
-Realtime Service
+현재 User Policy owner
 → User Policy DB update
 → Redis update
 
@@ -61,7 +61,7 @@ Global Policy
 
 서비스별 책임 경계는 다음과 같다.
 
-- Realtime Service는 사용자 AI 설정의 변경과 저장을 담당한다.
+- 현재 User Policy owner는 사용자 AI 설정의 변경과 저장을 담당한다.
 - AI Orchestrator는 모든 AI Policy를 적용하고 실행 여부를 최종 결정한다.
 - Omni AI는 허용된 요청을 실행하며 ON/OFF Policy 판단에 관여하지 않는다.
 
@@ -109,4 +109,4 @@ AI 가용성은 높아지지만 관리자가 차단했거나 사용자가 비활
 
 - [ADR 003. AI Orchestrator as an Application Service](003-ai-orchestrator-application-service.md)
 - [Architecture](../overview.md)
-- [Service Boundary and Migration](../concepts/service-boundary-and-migration.md)
+- [Current Service Boundary](../concepts/current-service-boundary.md)

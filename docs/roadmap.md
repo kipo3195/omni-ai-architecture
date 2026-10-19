@@ -25,7 +25,7 @@ ROOM_ENTERED / ROOM_LEFT
 → Messenger Business Logic
 → AI Orchestrator
 → Omni AI Server: TRENDING Conversation Start 생성
-→ Realtime Service
+→ Messenger Client Ingress의 현재 connection owner
 → Client
 ```
 
@@ -52,11 +52,12 @@ ROOM_ENTERED / ROOM_LEFT
 
 Status: Planned
 
-Desktop Client의 `connectType 1, 2`에서 사용자가 자리비움에서 온라인으로 복귀하면 자리비움 동안의 unread 쪽지를 조회한다. 대상이 있으면 사용자에게 실행 여부를 확인하고, 동의한 경우 Omni AI Server가 발신자·업무 주제·우선순위 중심의 Topic Digest를 생성해 요청 connection으로 전달한다.
+Presence owner가 인증된 Desktop Client의 `connectType 1, 2`에서 사용자의 자리비움 후 온라인 복귀를 확정하면, AI Orchestrator가 기능별 정책을 적용하고 자리비움 동안의 unread 쪽지를 조회한다. 대상이 있으면 사용자에게 실행 여부를 확인하고, 동의한 경우 Omni AI Server가 발신자·업무 주제·우선순위 중심의 Topic Digest를 생성해 요청 connection으로 전달한다.
 
 ```text
 Desktop connectType 1 또는 2: AWAY/OFFLINE → ONLINE
-→ AI Orchestrator
+→ Presence owner: connection 자격, 상태 전이, 자리비움 구간, USER_RETURNED 확정
+→ AI Orchestrator: source event 검증과 AI 기능 정책
 → 현재 Message owner의 DB 조회 Queue를 통한 unread 후보 선정
 → Client 요약 실행 확인
 → YES: Omni AI Server Topic Extraction + Priority
@@ -66,7 +67,7 @@ Desktop connectType 1 또는 2: AWAY/OFFLINE → ONLINE
 
 주요 범위:
 
-- Desktop `connectType 1, 2` 상태 변경 이벤트와 자리비움 구간 식별
+- Presence owner의 Desktop `connectType 1, 2` 적용 대상 판단, 상태 전이 감지와 자리비움 구간·`USER_RETURNED` 확정
 - 최소·최대 부재 시간과 장기 부재/만료 정책
 - 현재 Message owner의 DB 조회 Queue를 사용한 unread 후보 선정
 - unread가 없거나 사용자가 동의하지 않을 때 실행하지 않는 정책
@@ -77,7 +78,8 @@ Desktop connectType 1 또는 2: AWAY/OFFLINE → ONLINE
 
 완료 기준:
 
-- Desktop `connectType 1, 2` 이외의 복귀는 기능을 시작하지 않는다.
+- Presence owner는 Desktop `connectType 1, 2` 이외의 연결에서 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
+- AI Orchestrator는 source-confirmed 복귀 사실을 Presence 원시 상태로 재판정하지 않는다.
 - 동일 복귀 이벤트와 사용자 확인 응답은 한 번만 처리된다.
 - unread 쪽지가 없거나 사용자가 동의하지 않은 경우 LLM을 호출하지 않는다.
 - AI 실행이 시작된 뒤에는 최초 후보의 현재 읽음 여부와 관계없이 처리한다.
@@ -197,7 +199,6 @@ LLM이 실행 중 필요한 Tool을 선택하는 구체적인 AI 기능을 구�
 - 여러 차례 Tool Call과 장기 실행
 - AI Context Projection / Cache
 - Observability / Evaluation / Execution Budget
-- WebSocket Service responsibility split
 
 ---
 

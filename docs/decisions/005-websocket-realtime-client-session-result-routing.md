@@ -1,10 +1,10 @@
-# 005. WebSocket Realtime Service Result Routing by Authenticated Client Session
+# 005. WebSocket Service Result Routing by Authenticated Client Session
 
 Status: Accepted
 
 ## Context
 
-WebSocket Realtime Service MVP 대상 Client는 신뢰할 수 있는 별도 `deviceId`를 제공하지 않는다. Browser fingerprint나 Electron runtime 정보는 안정적인 식별자가 아니며 privacy와 보안 측면에서도 Realtime routing key로 사용하기 적합하지 않다.
+WebSocket Service MVP 대상 Client는 신뢰할 수 있는 별도 `deviceId`를 제공하지 않는다. Browser fingerprint나 Electron runtime 정보는 안정적인 식별자가 아니며 privacy와 보안 측면에서도 realtime routing key로 사용하기 적합하지 않다.
 
 현재 로그인 흐름은 REST 인증 요청으로 JWT를 발급하고, WebSocket 연결과 이후 REST 요청에서 같은 JWT를 검증해 인증 주체를 확인한다. 이 구조에서 Client가 별도 식별자를 생성하고 영구 저장하도록 요구하면 다음 정책이 Client 구현에 분산된다.
 
@@ -19,7 +19,7 @@ MVP에서는 동일 로그인 세션에 하나의 활성 WebSocket connection만
 
 ## Decision
 
-WebSocket Realtime Service MVP는 인증 서버가 로그인 세션 단위의 `clientSessionId`를 생성하고 JWT의 `sid` claim으로 발급한다.
+WebSocket Service MVP는 현재 인증 흐름이 로그인 세션 단위의 `clientSessionId`를 생성하고 JWT의 `sid` claim으로 발급하도록 한다.
 
 ```text
 REST Login
@@ -32,9 +32,9 @@ REST Login
 
 `sid`는 JWT 자체나 access token별 `jti`가 아니다. 같은 로그인 세션에서 access token을 refresh하면 기존 `sid`를 유지하고, 새로운 로그인 세션을 만들 때만 새로운 `sid`를 발급한다.
 
-Realtime Service는 Client가 request body, header 또는 WebSocket message로 제출한 별도 routing identifier를 신뢰하지 않는다. 검증된 JWT에서 `tenantId`, `userId`, `sid`를 추출하고 서버 내부에서는 `sid`를 `clientSessionId`로 사용한다.
+WebSocket Service는 Client가 request body, header 또는 WebSocket message로 제출한 별도 routing identifier를 신뢰하지 않는다. 검증된 JWT에서 `tenantId`, `userId`, `sid`를 추출하고 서버 내부에서는 `sid`를 `clientSessionId`로 사용한다.
 
-WebSocket Realtime Service의 공통 routing target에 `CLIENT_SESSION_CURRENT`를 사용한다.
+WebSocket Service의 공통 routing target에 `CLIENT_SESSION_CURRENT`를 사용한다.
 
 ```text
 routingRef
@@ -46,7 +46,7 @@ routingRef
   connectionType (Use Case가 요구하는 경우)
 ```
 
-`connectionType`은 모든 WebSocket Result의 필수값이 아니다. Returned Message Topics처럼 특정 Desktop connection type으로 전달을 제한하는 Use Case에서는 Realtime/Messenger 경계가 인증된 local connection context의 값을 설정하고, Result Router가 current connection record와 일치하는지 검증한다.
+`connectionType`은 모든 WebSocket Result의 필수값이 아니다. Returned Message Topics처럼 특정 Desktop connection type으로 전달을 제한하는 Use Case에서는 `Messenger Client Ingress`의 실제 connection owner가 인증된 local connection context의 값을 설정하고, Result Router가 current connection record와 일치하는지 검증한다.
 
 `clientSessionId`는 connection 자체가 아니라 현재 connection을 찾기 위한 논리적 pointer다. WebSocket 연결마다 재사용하지 않는 `connectionId`를 새로 생성한다. `leaseId`는 향후 connection ownership 갱신이나 인계가 필요한 경우 사용할 수 있는 확장 필드이며 MVP에서는 사용하지 않는다.
 
@@ -152,10 +152,10 @@ WebSocket 연결별 opaque token을 발급하고 REST 요청에서 함께 전달
 - `clientSessionId`는 물리 장치나 Client 설치를 식별하지 않으므로 신뢰 기기 관리, 장치 감사, push token 또는 장기 분석 ID로 사용할 수 없다.
 - 동일 JWT를 공유하는 복수 connection은 구분할 수 없다. MVP에서는 새 connection이 기존 connection을 교체해 하나의 활성 connection만 유지한다.
 - 향후 복수 connection, exact-connection delivery 또는 실제 device management가 필요하면 `connectionToken`, connection set 또는 별도 device identifier가 필요하다.
-- `sid` 발급이나 refresh 구현 오류가 Realtime routing 실패로 이어질 수 있으므로 Authentication과 Realtime Service 사이의 계약 테스트가 필요하다.
+- `sid` 발급이나 refresh 구현 오류가 realtime routing 실패로 이어질 수 있으므로 현재 인증 흐름과 WebSocket Service 사이의 계약 테스트가 필요하다.
 
 ## Related
 
 - [ADR 001. Session Registry Based AI Result Routing](001-session-registry-result-routing.md)
-- [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)
+- [Messenger Client Ingress Result Delivery](../components/messenger-client-ingress/result-delivery.md)
 - [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)

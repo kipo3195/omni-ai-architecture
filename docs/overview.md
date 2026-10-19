@@ -9,30 +9,24 @@
 
 Omni AI Platform은 Messenger의 Business Event와 Client Request를 AI 실행 후보의 진입점으로 삼고, `AI Orchestrator`와 `Omni AI Server`의 책임을 분리하는 구조를 목표로 한다.
 
-현재 Messenger Backend는 `WebSocket Service`가 인증, 파일, 실시간 채팅, 쪽지, 알림, 사용자 상태, REST API 등을 함께 처리하는 구조다. 또한 TCP 연결 기반 Client는 `TCP Realtime Service`를 통해 동일한 AI 기능과 요청 / 응답 규격을 제공해야 한다. 이 문서의 service split diagram은 현재 배포 구조가 아니라 **Target Architecture / Evolution Direction**이다.
+현재 Messenger Backend에서 Web Client는 `WebSocket Service (WS)`, 기존 Native Client는 `TCP Service (NS)`에 연결된다. `WebSocket Service`는 WebSocket 연결과 현재 Messenger Business Logic을 함께 처리하고, `TCP Service`는 Native Client의 TCP connection/session과 protocol ingress·delivery를 처리한다. 두 물리 서비스를 포괄하는 논리적 경계는 `Messenger Client Ingress`다.
 
-Target 구조에서는 각 Service가 자신의 Business State와 Policy에 대한 Source of Truth를 유지한다. `AI Orchestrator`는 여러 Service의 상태를 조합해야 하는 AI Use Case를 조정하고, `Omni AI Server`는 실행이 확정된 Task에 대해 Workflow 또는 Agent 방식으로 AI 처리를 수행한다.
+각 현재 Messenger Service는 자신이 구현한 Business State와 Policy의 Source of Truth를 유지한다. `AI Orchestrator`는 확정된 Business Event와 Context를 조합해 AI Use Case를 조정하고, `Omni AI Server`는 실행이 확정된 Task에 대해 Workflow 또는 Agent 방식으로 AI 처리를 수행한다. 서비스 분리·통합을 가정한 미래 배포 구조는 이 프로젝트의 범위에 포함하지 않는다.
 
 ---
 
 ## 2. Target High-level Flow
 
+아래 흐름은 Accepted ADR과 현재 설계 방향을 합친 Target Architecture다. 현재 구현은 Conversation Start REST ingress, 메모리 실행 저장소·Scheduler와 owner instance REST Result Delivery를 사용한다. 구현 완료 범위는 [Roadmap](roadmap.md)과 [Server Trigger](components/ai-orchestrator/server-trigger.md), [Result Router](components/ai-orchestrator/result-router.md)를 기준으로 확인한다.
+
 ```mermaid
 flowchart TD
-    A[Messenger Client] -->|WebSocket / REST| B[WebSocket Service<br/>WebSocket / Chat / Note / Alert]
-    A -->|TCP| T[TCP Realtime Service<br/>TCP Connection / Realtime Delivery]
+    WC[Web Client] -->|WebSocket / REST| B[WebSocket Service<br/>WS]
+    NC[Native Client] -->|TCP| T[TCP Service<br/>NS]
     B -->|Client AI Request| G[AI Orchestrator<br/>Policy / Context / Correlation / Metadata]
     T -->|Client AI Request| G
-    A --> C[user-service<br/>User / Presence / Rule / Label]
-    A --> D[auth-service<br/>Auth / Token Policy]
-    A --> E[file-service<br/>File / Attachment / Permission]
-
-    B --> C[user-service<br/>User / Presence / Rule / Label]
-    B --> D[auth-service<br/>Auth / Token Policy]
-    B --> E[file-service<br/>File / Attachment / Permission]
-
-    C --> F[NATS JetStream<br/>Business Event / AI Trigger]
     B --> F
+    T --> F[NATS JetStream<br/>Business Event / AI Trigger]
     F --> G
 
     G --> H{AI 실행 필요?}
@@ -47,10 +41,8 @@ flowchart TD
     N -->|Tool Request| G
     G --> O[Tool Runtime<br/>inside AI Orchestrator]
     O --> V[Server Tool Adapter]
-    V <--> C
-    V <--> D
-    V <--> E
     V <--> B
+    V <--> T
     O -->|Client Tool Dispatch| R
     B -->|Client Tool Result| P
     T -->|Client Tool Result| P
@@ -62,8 +54,8 @@ flowchart TD
     R -->|owner instance subject| P[Core NATS]
     P --> B
     P --> T
-    B --> A
-    T --> A
+    B --> WC
+    T --> NC
 ```
 
 
@@ -71,23 +63,22 @@ flowchart TD
 
 ## 3. Responsibility
 
-아래 책임표는 Target Architecture 기준이다. 현재 구현에서는 `WebSocket Service`가 일부 또는 대부분의 Messenger 책임을 함께 가질 수 있다.
+아래 책임표는 현재 배포 구조를 기준으로 한다.
 
 | Layer | Responsibility |
 | --- | --- |
-| WebSocket Service | WebSocket Connection / Session, Chat / Note / Alert, History REST, Realtime Push, AI Streaming Result 전달 |
-| user-service | User Profile, Organization / Class, Rule / Cache, Presence, Friend Memo, Label / Address Book |
-| auth-service | Authentication, Token Policy, JWT / Cookie Policy, User / Tenant Authentication Context |
-| file-service | File Upload / Download, Metadata, Permission, Attachment |
+| WebSocket Service (WS) | Web Client의 WebSocket connection/session, 인증된 Client context, 현재 WebSocket Service에 구현된 Chat / Note / Alert / User / Presence / Auth / File / REST Business Logic, WebSocket delivery |
+| TCP Service (NS) | Native Client의 TCP connection/session, legacy protocol와 `connectType` 해석, TCP request ingress·delivery, 소유한 Client 상태 전이 확정 |
+| Messenger Client Ingress | `WebSocket Service (WS)`와 `TCP Service (NS)`를 포괄하는 논리적 경계. 별도 배포 서비스가 아님 |
 | NATS JetStream | 재처리가 필요한 Business Event / AI Trigger 전달, durable consumer, ACK / retry |
 | AI Orchestrator | Cross-domain AI Use Case 조정, Trigger Policy, Context Assembly, Cooldown / Dedup, Execution Correlation, Conversation Metadata, Tool Runtime. 초기에는 Result Router module을 내부 배치 |
 | Omni AI Server | Workflow / Agent 실행, Prompt / LangGraph / LLM / Tool Decision, Conversation History / Runtime State |
 | Tool Runtime | `AI Orchestrator` 내부 책임. Tool registry, schema validation, permission, lifecycle, dispatch, timeout, retry, result normalization, execution resume 조정 |
-| Server Tool Adapter | Tool Runtime의 server-side adapter. Server-side context / tool 요청을 `auth-service`, `file-service`, `user-service`, `WebSocket Service`로 중계 |
+| Server Tool Adapter | Tool Runtime의 server-side adapter. Server-side context / tool 요청을 현재 해당 Business Logic을 소유한 Messenger Service로 중계 |
 | Client Tool Integration | Client Context / Client Tool을 `Omni AI Server`에 연결하는 Provider 계층 |
-| Client Tool Delivery | `WebSocket Service` 또는 `TCP Realtime Service` 내부 책임. Result Router가 선택한 instance의 local session lookup, client protocol delivery, Client Tool result ingress |
+| Client Tool Delivery | `WebSocket Service (WS)` 또는 `TCP Service (NS)` 내부 책임. Result Router가 선택한 instance의 local session lookup, client protocol delivery, Client Tool result ingress |
 | Result Router | `routingRef` 해석, Realtime Connection Registry의 현재 owner 조회, owner instance subject publish. 초기에는 AI Orchestrator 내부 module이며 이후 분리 가능 |
-| Realtime Connection Registry | Realtime Service가 등록한 현재 connection / room session / owner instance 조회. WebSocket / TCP session 자체를 소유하지 않음 |
+| Realtime Connection Registry | `WebSocket Service (WS)`와 `TCP Service (NS)`가 등록한 현재 connection / room session / owner instance 조회. WebSocket / TCP session 자체를 소유하지 않음 |
 | Core NATS / Realtime Delivery | Result Router가 선택한 owner instance로 LLM Streaming, Execution Progress, Client Tool dispatch를 저지연 전달 |
 
 ---
@@ -106,9 +97,11 @@ RETURNED_MESSAGE_TOPICS
 
 Business Event가 발생했다고 해서 항상 AiTask가 생성되는 것은 아니다. Business Policy를 통과해 `EXECUTE`가 확정된 경우에만 AiTask가 만들어진다.
 
+Business Event의 성립 여부는 해당 상태의 Source of Truth인 현재 Business owner가 판단한다. 예를 들어 `USER_RETURNED`는 `Messenger Client Ingress` 내부의 Presence owner가 인증된 connection context, `AWAY/OFFLINE → ONLINE` 전이, `offlineSince`, `returnedAt`, `absencePeriodId`를 확정한 Event다. `AI Orchestrator`는 이 상태 전이를 다시 추론하지 않고, source identity, 필수 필드, 시간 구간 정합성 같은 Event contract를 검증한 뒤 기능·사용자·만료·중복·Context 정책을 적용해 AI 실행 여부를 판단한다.
+
 Single-domain AI Use Case는 해당 Service에서 직접 처리할 수 있다. Cross-domain AI Use Case는 `AI Orchestrator`에서 여러 Service의 Context를 조합한다.
 
-현재 `WebSocket Service`가 여러 domain responsibility를 함께 가지고 있는 경우에도 원칙은 동일하다. 1차 구현에서는 `WebSocket Service`가 target service boundary의 adapter 역할을 하고, service split 이후에도 `AI Orchestrator` / `Omni AI Server` 계약이 크게 바뀌지 않게 한다.
+현재 `WebSocket Service (WS)`가 여러 Business responsibility를 함께 가지고 있는 경우에도 원칙은 동일하다. `AI Orchestrator`는 명시적인 Port나 API를 통해 현재 해당 책임을 소유한 Messenger Service와 연동하며, 이 프로젝트에서는 이를 미래의 개별 서비스 이름으로 미리 분해해 표현하지 않는다.
 
 
 ### Service Ownership과 AI Orchestrator
@@ -119,17 +112,11 @@ Single-domain AI Use Case는 해당 Service에서 직접 처리할 수 있다. C
 WebSocket Service
 → WebSocket / Chat / Note / Alert / Realtime Delivery
 
-TCP Realtime Service
+TCP Service
 → TCP Connection / Session / Realtime Delivery
 
-user-service
-→ User / Presence / Rule / Label
-
-auth-service
-→ Authentication / Token Policy
-
-file-service
-→ File / Attachment / Permission
+Messenger Client Ingress
+→ WebSocket Service (WS) + TCP Service (NS)의 공통 AI ingress / delivery 경계
 
 AI Orchestrator
 → Trigger Policy / Cross-domain Context Assembly / Execution Correlation / Conversation Metadata / Tool Runtime / Result Routing
@@ -138,14 +125,14 @@ Omni AI Server
 → Prompt / Workflow / LangGraph / LLM Execution / Tool Decision / Conversation History / Agent State
 ```
 
-`AI Orchestrator`는 사용자 상태, 메시지 상태, 인증 상태, 파일 상태의 Source of Truth가 아니다. 각 Domain Service가 소유한 상태는 해당 Service API / gRPC 또는 명시적으로 계약된 Projection을 통해 조회한다. `AI Orchestrator`가 직접 DB / Redis를 사용하는 범위는 cooldown, deduplication, execution correlation, conversation metadata처럼 자신이 소유한 실행 조정 상태로 제한한다.
+`AI Orchestrator`는 사용자 상태, 메시지 상태, 인증 상태, 파일 상태의 Source of Truth가 아니다. 각 상태는 현재 해당 기능을 구현한 Messenger Service가 소유하고, AI Orchestrator는 명시적인 Port나 API를 통해 조회한다. `AI Orchestrator`가 직접 DB / Redis를 사용하는 범위는 cooldown, deduplication, execution correlation, conversation metadata처럼 자신이 소유한 실행 조정 상태로 제한한다.
 
 
 ### Channel Boundary와 공통 AI 실행 규격
 
-WebSocket Service와 TCP Realtime Service는 각자의 connection, session, delivery 책임을 유지한다.
+`WebSocket Service (WS)`와 `TCP Service (NS)`는 각자의 connection, session, delivery 책임을 유지한다.
 
-AI 실행 판단, Trigger Policy, Context Assembly, AiTask 생성, Execution Correlation은 AI Orchestrator에서 공통화한다.
+Source owner가 자신이 소유한 상태 전이와 Business Event를 확정한다. 그 Event를 특정 AI 기능으로 전환하는 실행 판단, AI Trigger Policy, Context Assembly, AiTask 생성, Execution Correlation은 AI Orchestrator에서 공통화한다.
 
 ```text
 WebSocket Client
@@ -153,13 +140,13 @@ WebSocket Client
 → AI Orchestrator
 → Omni AI Server
 
-TCP Client
-→ TCP Realtime Service
+Native Client
+→ TCP Service (NS)
 → AI Orchestrator
 → Omni AI Server
 ```
 
-이 구조는 WebSocket 경로와 TCP 경로가 동일한 AI Use Case, 요청 / 응답 규격, executionId 기반 correlation을 사용하게 한다. AI 기능이 늘어나도 channel별 realtime service에 policy를 중복 구현하지 않는다.
+이 구조는 WebSocket 경로와 TCP 경로가 동일한 AI Use Case, 요청 / 응답 규격, executionId 기반 correlation을 사용하게 한다. AI 기능이 늘어나도 `WebSocket Service (WS)`와 `TCP Service (NS)`에 policy를 중복 구현하지 않는다.
 
 
 ### Conversation Metadata와 Runtime State
@@ -244,10 +231,10 @@ Tool Lifecycle
 = AI Orchestrator Tool Runtime
 
 Server Tool Execution
-= AI Orchestrator Tool Runtime → Server Tool Adapter → target service
+= AI Orchestrator Tool Runtime → Server Tool Adapter → 현재 Business owner
 
 Client Tool Execution
-= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회 → Core NATS owner-instance subject → Realtime Service Client Tool Delivery → local connection → Client
+= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry에서 routingRef 기준 현재 ownerInstanceId 조회 → Core NATS owner-instance subject → Messenger Client Ingress의 현재 connection owner → local connection → Client
 ```
 
 
@@ -258,12 +245,12 @@ Client Tool Execution
 ### Server-driven AI
 
 ```text
-user-service
+현재 Business Event owner
 → NATS JetStream
 → AI Orchestrator
 → Omni AI Server
 → Core NATS
-→ WebSocket Service
+→ Messenger Client Ingress의 현재 connection owner
 → Client
 ```
 
@@ -274,14 +261,11 @@ Trigger는 Server Business Event이고, 실행은 One-shot이며, 결과는 Real
 
 ```text
 Client
-→ AI Orchestrator
-또는
-Client
-→ WebSocket Service
+→ Messenger Client Ingress
 → AI Orchestrator
 → Omni AI Server
 → Core NATS
-→ WebSocket Service
+→ Messenger Client Ingress의 현재 connection owner
 → Client
 ```
 
@@ -292,14 +276,11 @@ Trigger는 `/요약`, `/일정`, `/번역` 같은 명시적 Client Request이고
 
 ```text
 Client
-→ AI Orchestrator
-또는
-Client
-→ WebSocket Service
+→ Messenger Client Ingress
 → AI Orchestrator
 → Omni AI Server
 → Core NATS
-→ WebSocket Service
+→ Messenger Client Ingress의 현재 connection owner
 → Client
 ```
 
@@ -358,28 +339,28 @@ Business Event / AI Trigger
 = NATS JetStream
 
 Control Path
-= Client / Realtime Service → AI Orchestrator → Omni AI Server
+= Client / Messenger Client Ingress → AI Orchestrator → Omni AI Server
 
 Streaming Data Path
-= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
+= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Messenger Client Ingress → Client
 
 Execution Progress Path
-= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
+= Omni AI Server → Result Router → Realtime Connection Registry 조회 → Core NATS → Messenger Client Ingress → Client
 
 Tool Control Path
 = Omni AI Server → AI Orchestrator Tool Runtime
 
 Server Tool Dispatch
-= AI Orchestrator Tool Runtime → target service
+= AI Orchestrator Tool Runtime → 현재 Business owner
 
 Client Tool Dispatch
-= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry 조회 → Core NATS → Realtime Service → Client
+= AI Orchestrator Tool Runtime → Result Router → Realtime Connection Registry 조회 → Core NATS → Messenger Client Ingress → Client
 
 Client Tool Result
-= Client → Realtime Service → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
+= Client → Messenger Client Ingress → Core NATS → AI Orchestrator Tool Runtime → Omni AI Server resume
 ```
 
-통일하는 대상은 Transport가 아니라 `triggerId`, `taskId`, `executionId`, `conversationId`, `connectionId`, `roomSessionId`, `toolCallId`, `toolAttempt`, `idempotencyKey` 같은 실행 계약과 식별자이다.
+통일하는 대상은 Transport가 아니라 실행 계약과 식별자다. `executionId`, `conversationId`, `connectionId`, `roomSessionId` 등의 역할 분리는 목표 방향이지만, 전체 식별자 모델은 아직 [ADR 004](decisions/004-ai-execution-and-context-identifiers.md)가 `Proposed` 상태이므로 확정 계약처럼 해석하지 않는다. 현재 계약 확정 상태와 공통 명칭은 [Common Contracts](contracts/README.md)를 따른다.
 
 `AI Orchestrator`가 관리하는 Control Path:
 
@@ -393,7 +374,7 @@ routing context
 tool lifecycle
 ```
 
-`Omni AI Server`가 Core NATS로 전달하는 Stream Event 후보:
+`Omni AI Server`가 생성하고 Result Router가 전달할 Stream Event 후보:
 
 ```text
 START
@@ -404,9 +385,9 @@ COMPLETED
 FAILED
 ```
 
-`Result Router`는 `routingRef`로 Realtime Connection Registry를 조회하고, 현재 `ownerInstanceId`의 Core NATS subject를 선택한다. Core NATS는 registry lookup을 수행하지 않고 선택된 subject의 event만 전달한다. `WebSocket Service`와 `TCP Realtime Service`는 해당 event를 각자의 client protocol로 변환해 자신이 소유한 local connection에 전달한다.
+`Result Router`는 `routingRef`로 Realtime Connection Registry를 조회하고, 현재 `ownerInstanceId`의 Core NATS subject를 선택한다. Core NATS는 registry lookup을 수행하지 않고 선택된 subject의 event만 전달한다. `WebSocket Service (WS)`와 `TCP Service (NS)`는 해당 event를 각자의 client protocol로 변환해 자신이 소유한 local connection에 전달한다.
 
-Client Tool request / response는 Tool Runtime을 data path로 사용한다. `Omni AI Server`가 tool call을 결정하면 `AI Orchestrator`의 Tool Runtime이 lifecycle과 routingRef를 생성한다. Result Router가 Realtime Connection Registry에서 현재 ownerInstanceId를 조회해 Core NATS owner-instance subject를 선택하고, 선택된 Realtime Service의 Client Tool Delivery가 local connection으로 전달한 뒤 결과를 Tool Runtime으로 반환한다.
+Client Tool request / response는 Tool Runtime을 data path로 사용한다. `Omni AI Server`가 tool call을 결정하면 `AI Orchestrator`의 Tool Runtime이 lifecycle과 routingRef를 생성한다. Result Router가 Realtime Connection Registry에서 현재 ownerInstanceId를 조회해 Core NATS owner-instance subject를 선택하고, 선택된 `WebSocket Service (WS)` 또는 `TCP Service (NS)`의 Client Tool Delivery가 local connection으로 전달한 뒤 결과를 Tool Runtime으로 반환한다.
 
 LLM token stream과 execution progress는 Tool Runtime을 통과하지 않는다. Tool Runtime은 `tool_started`, `tool_progress`, `tool_completed`, `tool_failed`, `tool_timeout` 같은 Tool lifecycle event를 관리한다. 초기에는 AI Orchestrator 내부 Result Router가 routing만 수행하며, 고빈도 token stream을 Client까지 proxy하지 않는다. 필요해지면 동일한 `ResultEvent` 계약을 유지한 채 Result Router를 독립 Realtime Delivery Plane으로 분리한다.
 
@@ -427,34 +408,14 @@ Instance Restart
 Session Migration
 ```
 
-최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다. `enterRoom`이나 Client explicit request를 처리한 instance는 correlation 정보로만 보고, `connectionId` / `roomSessionId`를 통해 Realtime Connection Registry에서 현재 `ownerInstanceId`를 resolve한다. 특정 Client 종류로 전달을 제한하는 Use Case는 Realtime/Messenger 경계가 검증한 선택적 `routingRef.connectionType`을 함께 저장하고, Result Router가 현재 connection record와 일치하는지 확인한다. Result Router는 owner instance subject를 선택할 뿐 session을 소유하지 않으며, Realtime Service가 local connection으로 최종 push한다.
+최종 Routing 시점에는 현재 Session Owner를 기준으로 전달한다. `enterRoom`이나 Client explicit request를 처리한 instance는 correlation 정보로만 보고, `connectionId` / `roomSessionId`를 통해 Realtime Connection Registry에서 현재 `ownerInstanceId`를 resolve한다. 특정 Client 종류로 전달을 제한하는 Use Case는 Messenger Client Ingress가 검증한 선택적 `routingRef.connectionType`을 함께 저장하고, Result Router가 현재 connection record와 일치하는지 확인한다. Result Router는 owner instance subject를 선택할 뿐 session을 소유하지 않으며, 선택된 `WebSocket Service (WS)` 또는 `TCP Service (NS)`가 local connection으로 최종 push한다.
 
 
 ---
 
-## 9. Evolution Direction
+## 9. Further Design Topics
 
-현재 `WebSocket Service`가 WebSocket, Chat, Note, Alert, User State, User Info, Auth, File, REST API 책임을 동시에 가진 경우 AI Trigger, Context Assembly, LLM Streaming, Result Routing까지 직접 추가하면 Messenger Core와 AI 기능이 강하게 결합될 수 있다.
-
-Target Architecture에서는 다음 방향으로 책임을 점진적으로 분리한다. 이 분리는 Omni AI 1차 구축 범위가 아니라 별도 migration topic이다.
-
-```text
-WebSocket Service
-user-service
-auth-service
-file-service
-AI Orchestrator
-Omni AI Server
-```
-
-Spring Boot는 이 분리 자체의 목적이 아니라, 신규 Java Application Service를 구현하기 위한 후보 기술이다. `Omni AI Server`는 Python / FastAPI / LangGraph 기반 AI Runtime 영역으로 둔다.
-
-
----
-
-## 10. Further Design Topics
-
-다음 항목은 Target Architecture의 후속 설계 범위이며, 구현 우선순위와 진행 상태는 [Roadmap](roadmap.md)에서 관리한다.
+다음 항목은 현재 Messenger 배포 구조 안에서 진행할 후속 설계 범위이며, 구현 우선순위와 진행 상태는 [Roadmap](roadmap.md)에서 관리한다.
 
 - Stateful Chatbot과 장기 Conversation lifecycle
 - Agent Runtime과 반복 Tool Calling

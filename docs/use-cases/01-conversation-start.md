@@ -16,7 +16,7 @@ ROOM_ENTERED / ROOM_LEFT
 → Messenger Business Logic
 → AI Orchestrator: 실행 판단과 correlation
 → Omni AI Server: TRENDING Workflow
-→ Realtime Service: 현재 room session 확인
+→ Messenger Client Ingress의 현재 connection owner: room session 확인
 → Client Suggestion
 ```
 
@@ -27,7 +27,7 @@ ROOM_ENTERED / ROOM_LEFT
 | Messenger Business Logic | 방 입장·퇴장 사실과 session 식별자 제공 |
 | AI Orchestrator | 실행 예약, 취소, Context 구성, AI 호출, 유효한 결과 판정 |
 | Omni AI Server | Conversation Start 데이터 생성 |
-| Realtime Service | 현재 session 조회와 Client 전달 |
+| Messenger Client Ingress | `WebSocket Service (WS)` 또는 `TCP Service (NS)`에서 현재 session 조회와 Client 전달 |
 | Client | 추천 표시 |
 
 ## Contracts
@@ -77,19 +77,19 @@ Omni AI Server 실패나 timeout은 실행 실패로 기록하고 추천 없이 
 - 추천 유형
 - 원 요청과 연결할 execution identifier
 
-현재 구현은 최근 메시지가 비어 있고 Conversation Start 전용 HTTP 계약을 사용한다. 결과는 공통 Result Router가 Redis에서 현재 Realtime connection owner를 조회한 뒤 해당 instance의 REST endpoint로 전달한다. 공통 AiTask 계약과 Target Core NATS delivery는 아직 연결되지 않았다.
+현재 구현은 최근 메시지가 비어 있고 Conversation Start 전용 HTTP 계약을 사용한다. 결과는 공통 Result Router가 Redis에서 현재 realtime connection owner를 조회한 뒤 해당 instance의 REST endpoint로 전달한다. 공통 AiTask 계약과 계획된 Core NATS delivery는 아직 연결되지 않았다.
 
 ## Current Implementation Gap
 
 현재 Orchestrator는 REST ingress, 메모리 Repository, 프로세스 내부 Scheduler를 사용한다. 동일 `roomSessionId` 멱등 처리, 재입장 시 이전 실행 취소, 실행 직전 Global Policy 확인, Omni AI Server 호출과 REST 기반 Result Delivery까지 구현되어 있다.
 
-남은 범위는 최근 메시지·Presence Context 조회, Feature/User Policy와 cooldown, 검증된 인증 context의 `tenantId`·`clientSessionId` 연결, 공통 AiTask 및 전체 correlation, durable 실행 저장소와 Scheduler, Target Core NATS delivery, 실패 retry와 최종 Client Suggestion E2E 검증이다.
+남은 범위는 최근 메시지·Presence Context 조회, Feature/User Policy와 cooldown, 검증된 인증 context의 `tenantId`·`clientSessionId` 연결, 공통 AiTask 및 전체 correlation, durable 실행 저장소와 Scheduler, 계획된 Core NATS delivery, 실패 retry와 최종 Client Suggestion E2E 검증이다.
 
 ## Open Questions
 
 - Phase 1에서 `triggerId`, `taskId`를 모두 도입할지
 - Phase 1 완료 기준에서 현재 REST Delivery를 유지할지, Core NATS 전환까지 포함할지
-- Realtime Service의 event 수신부터 local Client Suggestion 전달까지 어떤 환경에서 E2E 검증할지
+- `Messenger Client Ingress`의 현재 connection owner가 event를 수신한 뒤 local Client Suggestion을 전달하는 구간을 어떤 환경에서 E2E 검증할지
 
 ## Related Documents
 
@@ -97,6 +97,6 @@ Omni AI Server 실패나 timeout은 실행 실패로 기록하고 추천 없이 
 - [Server Trigger](../components/ai-orchestrator/server-trigger.md)
 - [Task Execution](../components/omni-ai-server/task-execution.md)
 - [Session Registry Based AI Result Routing](../decisions/001-session-registry-result-routing.md)
-- [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)
+- [Messenger Client Ingress Result Delivery](../components/messenger-client-ingress/result-delivery.md)
 - [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)
 - [Omni AI Server Result Event](../components/omni-ai-server/result-event.md)

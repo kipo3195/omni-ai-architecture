@@ -6,9 +6,9 @@ Status: In Progress
 
 ## Purpose
 
-AI Orchestrator가 trusted `routingRef`를 사용해 현재 Realtime connection owner를 선택하고 Result를 전달하는 구현 책임을 정의한다. 현재 Conversation Start는 `AiExecution`을 Router에 직접 전달하며, Target 구조에서는 `executionId`로 공유 저장소의 실행 상태와 `routingRef`를 복원한다.
+AI Orchestrator가 trusted `routingRef`를 사용해 현재 realtime connection owner를 선택하고 Result를 전달하는 구현 책임을 정의한다. 현재 Conversation Start는 `AiExecution`을 Router에 직접 전달하며, 계획된 공유 저장소 연동에서는 `executionId`로 실행 상태와 `routingRef`를 복원한다.
 
-공통 이벤트 계약과 전체 흐름은 [ADR 001](../../decisions/001-session-registry-result-routing.md)을 따른다. WebSocket Realtime Service MVP의 인증 세션 기반 target은 [ADR 005](../../decisions/005-websocket-realtime-client-session-result-routing.md)를 따른다.
+공통 이벤트 계약과 전체 흐름은 [ADR 001](../../decisions/001-session-registry-result-routing.md)을 따른다. WebSocket Service MVP의 인증 세션 기반 target은 [ADR 005](../../decisions/005-websocket-realtime-client-session-result-routing.md)를 따른다.
 
 ## Current Implementation
 
@@ -21,13 +21,13 @@ AiExecution + ResultEvent
 → owner instance REST endpoint
 ```
 
-Conversation Start가 이 경로를 사용하며 router, Redis resolver와 REST client에 대한 단위 테스트가 있다. NATS delivery adapter는 아직 Spring Bean으로 등록되지 않은 placeholder이고, 아래 Core NATS flow는 Target Architecture다.
+Conversation Start가 이 경로를 사용하며 router, Redis resolver와 REST client에 대한 단위 테스트가 있다. NATS delivery adapter는 아직 Spring Bean으로 등록되지 않은 placeholder이고, 아래 Core NATS flow는 이 프로젝트의 계획된 result delivery 경로다.
 
 ---
 
-## Target Execution Correlation
+## Target Shared Execution Correlation
 
-Execution과 routing context는 Orchestrator instance memory가 아니라 공유 저장소에 보관한다.
+Target 구조에서는 execution과 routing context를 Orchestrator instance memory가 아니라 공유 저장소에 보관한다. 현재 Conversation Start는 메모리 Repository를 사용하며, 아래 저장 구조는 아직 구현되지 않았다.
 
 ```text
 ai:execution:{executionId}
@@ -74,11 +74,11 @@ routingRef
 
 Result Router는 Client나 Omni AI Server가 반환한 routing 위치를 신뢰하지 않는다. `executionId`로 Orchestrator가 저장한 `routingRef`를 조회한다.
 
-`connectionType`은 특정 Client 종류로 delivery를 제한해야 하는 Use Case의 선택적 constraint다. `channelType`이 WebSocket/TCP transport를 의미하는 것과 달리, `connectionType`은 Realtime/Messenger 경계가 인증된 connection context에서 판정한 제품별 연결 구분이다. Returned Message Topics에서는 Desktop Client의 legacy `connectType 1, 2` 중 요청을 발생시킨 값을 trusted `routingRef`에 저장한다.
+`connectionType`은 특정 Client 종류로 delivery를 제한해야 하는 Use Case의 선택적 constraint다. `channelType`이 WebSocket/TCP transport를 의미하는 것과 달리, `connectionType`은 Messenger Client Ingress가 인증된 connection context에서 판정한 제품별 연결 구분이다. Returned Message Topics에서는 Desktop Client의 legacy `connectType 1, 2` 중 요청을 발생시킨 값을 trusted `routingRef`에 저장한다.
 
 `scopeRef`가 있으면 `scopeRef.type`에 대응하는 validator로 Event가 아직 유효한지 확인한다. 예를 들어 Conversation Start는 `ROOM_SESSION`, Draft Assist는 `DRAFT_SESSION` validator를 사용할 수 있다. 별도 lifecycle이 없는 Event는 scope 검증을 생략한다.
 
-`DEVICE_CURRENT` target은 Realtime Service가 전달한 인증된 `tenantId + userId + deviceId`를 사용해 다음과 같이 resolve한다.
+`DEVICE_CURRENT` target은 Messenger Client Ingress가 전달한 인증된 `tenantId + userId + deviceId`를 사용해 다음과 같이 resolve한다.
 
 ```text
 rt:device-current:{tenantId}:{userId}:{deviceId}
@@ -88,7 +88,7 @@ rt:connection:{tenantId}:{connectionId}
 → ownerInstanceId
 ```
 
-WebSocket Realtime Service MVP의 `CLIENT_SESSION_CURRENT` target은 Realtime Service가 검증된 JWT의 `sid`에서 구성한 `tenantId + userId + clientSessionId`를 사용한다.
+WebSocket Service MVP의 `CLIENT_SESSION_CURRENT` target은 WebSocket Service가 검증된 JWT의 `sid`에서 구성한 `tenantId + userId + clientSessionId`를 사용한다.
 
 ```text
 rt:client-session-current:{tenantId}:{userId}:{clientSessionId}
@@ -112,7 +112,7 @@ trusted `routingRef.connectionType`이 있으면 resolved connection record의 �
 
 ---
 
-## Target Result Routing Flow
+## Planned Core NATS Result Routing Flow
 
 ```text
 1. ResultEvent의 executionId / eventId 검증
@@ -163,6 +163,6 @@ Core NATS publish 성공은 Client 수신 성공을 의미하지 않는다. 수�
 ## Related
 
 - [ADR 001. Session Registry Based AI Result Routing](../../decisions/001-session-registry-result-routing.md)
-- [ADR 005. WebSocket Realtime Service Result Routing by Authenticated Client Session](../../decisions/005-websocket-realtime-client-session-result-routing.md)
-- [Realtime Service Result Delivery](../realtime-service/result-delivery.md)
+- [ADR 005. WebSocket Service Result Routing by Authenticated Client Session](../../decisions/005-websocket-realtime-client-session-result-routing.md)
+- [Messenger Client Ingress Result Delivery](../messenger-client-ingress/result-delivery.md)
 - [Omni AI Server Result Event](../omni-ai-server/result-event.md)

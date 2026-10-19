@@ -24,9 +24,9 @@ AI 기능이 늘어나면서 방 입장, Client 요청, 파일 처리, 정기 �
 | `eventId` | 결과·진행 이벤트 중복 제거 | Event Producer |
 | `idempotencyKey` | 동일 요청의 중복 실행 방지 | Trigger Source / AI Orchestrator |
 | `conversationId` | 여러 AI 실행에 걸친 논리적 대화 식별 | AI Orchestrator |
-| `clientId` | Client 또는 Device 구분 | Realtime Service |
-| `connectionId` | 현재 Realtime Connection 식별 | Realtime Service / Session Registry |
-| `roomSessionId` | 특정 Connection의 방 입장 구간 식별 | Realtime Service / Session Registry |
+| `clientId` | Client 또는 Device 구분 | Messenger Client Ingress |
+| `connectionId` | 현재 realtime connection 식별 | Messenger Client Ingress / Session Registry |
+| `roomSessionId` | 특정 connection의 방 입장 구간 식별 | Messenger Client Ingress / Session Registry |
 
 `executionId`는 항상 존재하지만 나머지 ID는 Use Case에 필요한 경우에만 연결한다.
 

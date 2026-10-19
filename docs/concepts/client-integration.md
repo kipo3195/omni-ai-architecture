@@ -107,7 +107,7 @@ Server-side Context나 Tool이 필요한 경우에는 Tool Runtime의 Server Too
 Omni AI Server
 → AI Orchestrator Tool Runtime
 → Server Tool Adapter
-→ auth-service / file-service / user-service / WebSocket Service
+→ 현재 해당 Business Logic을 소유한 Messenger Service
 ```
 
 Client-side Context나 Tool이 필요한 경우에는 Tool Runtime에서 Core NATS와 Client Tool Delivery를 통해 Client에 dispatch한다.
@@ -276,14 +276,14 @@ Omni AI Server
 → Result Router
 → Realtime Connection Registry 조회
 → Core NATS owner-instance subject
-→ Realtime Service
+→ Messenger Client Ingress
 → Client WebSocket
 ```
 
 `WebSocket Service` 책임:
 
 - Core NATS AI Stream 수신
-- Result Router가 선택한 instance에서 local session map으로 Target WebSocket Session 확인
+- Result Router가 선택한 instance에서 local session map으로 전달 대상 WebSocket session 확인
 - Messenger Client WebSocket Protocol로 변환
 - Client에 Stream Push
 

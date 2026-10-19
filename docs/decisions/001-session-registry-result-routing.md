@@ -15,17 +15,17 @@ Omni AI 기능은 Client explicit request와 Server trigger 양쪽에서 시작�
 - `LABEL_MATCHED` 기반 multimodal action
 - `ENTER_ROOM` 기반 Conversation Start
 
-이때 Trigger 또는 API 요청을 처리한 `Realtime Service` instance와 실제 WebSocket / TCP connection을 소유한 instance가 다를 수 있다.
+이때 Trigger 또는 API 요청을 처리한 `Messenger Client Ingress`의 instance와 실제 WebSocket / TCP connection을 소유한 instance가 다를 수 있다.
 
 ```text
 enterRoom 처리
-Client → Realtime Service #1
+Client → WebSocket Service (WS) 또는 TCP Service (NS) #1
 
 AI 처리 중 reconnect
-Client WebSocket / TCP → Realtime Service #6
+Client WebSocket / TCP → 현재 connection owner instance #6
 
 Result push
-Realtime Service #1로 보내면 실패하거나 stale session이 된다.
+요청을 처리한 instance #1로 보내면 실패하거나 stale session이 된다.
 ```
 
 Scale-out, scale-in, instance restart, reconnect, session migration, multi-device 상황에서도 같은 문제가 발생한다.
@@ -34,7 +34,7 @@ Scale-out, scale-in, instance restart, reconnect, session migration, multi-devic
 
 AI Result delivery는 Trigger source instance가 아니라 Session Registry의 현재 owner 기준으로 routing한다.
 
-WebSocket / TCP 연결 시 각 Realtime Service는 Realtime Connection Registry에 현재 연결을 등록한다.
+WebSocket / TCP 연결 시 `WebSocket Service (WS)`와 `TCP Service (NS)`는 Realtime Connection Registry에 자신이 소유한 현재 연결을 등록한다.
 
 ```text
 connectionId
@@ -43,7 +43,7 @@ connectionType (Use Case가 요구하는 경우)
 tenantId
 userId
 deviceId (필요 시)
-clientSessionId (WebSocket Realtime Service 인증 세션 target인 경우)
+clientSessionId (WebSocket Service 인증 세션 target인 경우)
 ownerServiceType
 ownerInstanceId
 leaseId
@@ -73,9 +73,9 @@ routingRef
     id
 ```
 
-`channelType`은 WebSocket/TCP 같은 transport 또는 Realtime Service 종류를 나타내고, `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 connection 구분값이다. `connectionType`은 모든 Result의 공통 필수가 아니라 특정 Client 종류로 전달을 제한해야 하는 Use Case의 선택적 delivery constraint다. 예를 들어 Returned Message Topics는 Desktop Client의 legacy `connectType 1, 2`만 대상으로 하므로 trusted `routingRef.connectionType`을 필수로 저장한다.
+`channelType`은 WebSocket/TCP 같은 transport 또는 `Messenger Client Ingress` 내부의 물리 서비스 종류를 나타내고, `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 connection 구분값이다. `connectionType`은 모든 Result의 공통 필수가 아니라 특정 Client 종류로 전달을 제한해야 하는 Use Case의 선택적 delivery constraint다. 예를 들어 Returned Message Topics는 Desktop Client의 legacy `connectType 1, 2`만 대상으로 하므로 trusted `routingRef.connectionType`을 필수로 저장한다.
 
-`connectionType`이 있는 경우 Result Router는 `targetRef`로 현재 connection을 resolve한 뒤 Registry record의 `connectionType`이 trusted `routingRef`와 일치하는지 검증한다. 값이 다르면 다른 타입의 connection이나 사용자 전체 connection으로 fallback 또는 broadcast하지 않는다. 이 값은 Client request body의 원시값을 신뢰하지 않고 Realtime/Messenger 경계가 인증된 connection context에서 구성한다.
+`connectionType`이 있는 경우 Result Router는 `targetRef`로 현재 connection을 resolve한 뒤 Registry record의 `connectionType`이 trusted `routingRef`와 일치하는지 검증한다. 값이 다르면 다른 타입의 connection이나 사용자 전체 connection으로 fallback 또는 broadcast하지 않는다. 이 값은 Client request body의 원시값을 신뢰하지 않고 `Messenger Client Ingress`가 인증된 connection context에서 구성한다.
 
 `targetRef.type`의 의미는 다음과 같다.
 
@@ -84,7 +84,7 @@ routingRef
 - `CLIENT_SESSION_CURRENT`: 같은 인증 Client session의 현재 connection으로 다시 resolve한다.
 - `SCOPE`: Use Case scope가 현재 가리키는 connection으로 resolve한다.
 
-Realtime Service는 인증된 Client context로 `routingRef`를 만들고 AI Orchestrator에 전달한다. `DEVICE_CURRENT` 정책에서는 `tenantId`, `userId`, `deviceId`를 전달하며 현재 `ownerInstanceId`를 authoritative routing 값으로 전달하지 않는다. AI Orchestrator의 Result Router가 결과 전달 시점에 다음 순서로 현재 owner를 조회한다.
+`WebSocket Service (WS)` 또는 `TCP Service (NS)`는 인증된 Client context로 `routingRef`를 만들고 AI Orchestrator에 전달한다. `DEVICE_CURRENT` 정책에서는 `tenantId`, `userId`, `deviceId`를 전달하며 현재 `ownerInstanceId`를 authoritative routing 값으로 전달하지 않는다. AI Orchestrator의 Result Router가 결과 전달 시점에 다음 순서로 현재 owner를 조회한다.
 
 ```text
 tenantId + userId + deviceId
@@ -93,7 +93,7 @@ tenantId + userId + deviceId
 → owner instance subject
 ```
 
-WebSocket Realtime Service MVP는 신뢰할 수 있는 별도 `deviceId`를 Client에서 추출하거나 저장하도록 요구하지 않는다. 인증 서버가 발급한 JWT의 `sid`를 검증해 `clientSessionId`로 사용하고 `CLIENT_SESSION_CURRENT` target을 구성한다. Result Router는 다음 순서로 현재 owner를 조회한다.
+WebSocket Service MVP는 신뢰할 수 있는 별도 `deviceId`를 Client에서 추출하거나 저장하도록 요구하지 않는다. 현재 인증 흐름에서 발급한 JWT의 `sid`를 검증해 `clientSessionId`로 사용하고 `CLIENT_SESSION_CURRENT` target을 구성한다. Result Router는 다음 순서로 현재 owner를 조회한다.
 
 ```text
 tenantId + userId + clientSessionId
@@ -102,9 +102,9 @@ tenantId + userId + clientSessionId
 → owner instance subject
 ```
 
-`clientSessionId`는 Client가 request payload로 제출한 값을 사용하지 않고 검증된 인증 context에서만 얻는다. 같은 로그인 세션에서 access token을 refresh하면 `sid`를 유지한다. 상세한 WebSocket Realtime Service MVP 인증 및 단일 활성 connection 정책은 [ADR 005](005-websocket-realtime-client-session-result-routing.md)를 따른다.
+`clientSessionId`는 Client가 request payload로 제출한 값을 사용하지 않고 검증된 인증 context에서만 얻는다. 같은 로그인 세션에서 access token을 refresh하면 `sid`를 유지한다. 상세한 WebSocket Service MVP 인증 및 단일 활성 connection 정책은 [ADR 005](005-websocket-realtime-client-session-result-routing.md)를 따른다.
 
-Realtime Service가 요청 시점에 connection이나 owner를 조회하더라도 이는 인증과 요청 검증을 위한 것이다. 최종 delivery instance는 AI Orchestrator가 Result 처리 시점에 다시 resolve한다.
+`Messenger Client Ingress`가 요청 시점에 connection이나 owner를 조회하더라도 이는 인증과 요청 검증을 위한 것이다. 최종 delivery instance는 AI Orchestrator가 Result 처리 시점에 다시 resolve한다.
 
 `scopeRef`는 공통 Session ID가 아니다. Event의 유효 범위를 독립적으로 검증해야 할 때만 사용한다. 
 
@@ -120,7 +120,7 @@ ResultEvent
   payload
 ```
 
-Result Router는 Event에 포함된 routing 위치를 그대로 신뢰하지 않고 `executionId`로 AI Orchestrator가 저장한 trusted `routingRef`를 조회한다. 선택된 Realtime Service instance로 보내는 계약은 다음과 같다.
+Result Router는 Event에 포함된 routing 위치를 그대로 신뢰하지 않고 `executionId`로 AI Orchestrator가 저장한 trusted `routingRef`를 조회한다. 선택된 `WebSocket Service (WS)` 또는 `TCP Service (NS)` instance로 보내는 계약은 다음과 같다.
 
 ```text
 DeliveryEvent
@@ -144,13 +144,13 @@ DeliveryEvent
 
 ```text
 Client WebSocket Connect
-→ 임의의 Realtime Service instance
+→ 임의의 WebSocket Service (WS) 또는 TCP Service (NS) instance
 → 인증 context에서 logical target 식별자 확인
 → connectionId / leaseId 생성
 → Realtime Connection Registry 등록
 
 Client REST 또는 WebSocket AI Request
-→ 임의의 Realtime Service instance
+→ 임의의 WebSocket Service (WS) 또는 TCP Service (NS) instance
 → 인증 주체와 target connection resolve
 → Use Case scope ID 생성 또는 확인 (필요 시)
 → 임의의 AI Orchestrator instance
@@ -171,15 +171,15 @@ AI Orchestrator Result Router
 → routingRef.connectionType이 있으면 connection record와 일치 여부 검증
 → Core NATS owner instance subject로 DeliveryEvent publish
 
-현재 Realtime Service instance
+현재 connection owner instance
 → exact connectionId local lookup
 → 인증 주체 검증
 → local realtime connection으로 최종 push
 ```
 
-Realtime Service, AI Orchestrator, Omni AI Server 사이에는 sticky session이 필수가 아니다. 특정 instance에 종속되는 상태는 Realtime Service의 local connection뿐이며, 해당 위치는 Session Registry로 resolve한다.
+`Messenger Client Ingress`, AI Orchestrator, Omni AI Server 사이에는 sticky session이 필수가 아니다. 특정 instance에 종속되는 상태는 `WebSocket Service (WS)` 또는 `TCP Service (NS)`의 local connection뿐이며, 해당 위치는 Session Registry로 resolve한다.
 
-`sourceInstanceId`는 correlation 정보로만 사용한다. 최종 delivery source of truth로 사용하지 않는다. Connection Registry는 WebSocket 전용이 아니라 WebSocket / TCP Realtime Service가 각자 등록하는 Realtime Connection Registry로 확장한다. 각 Realtime Service는 자신의 local connection을 소유하고 최종 push를 수행한다.
+`sourceInstanceId`는 correlation 정보로만 사용한다. 최종 delivery source of truth로 사용하지 않는다. Connection Registry는 WebSocket 전용이 아니라 `WebSocket Service (WS)`와 `TCP Service (NS)`가 각자 등록하는 Realtime Connection Registry다. 두 서비스는 각자의 local connection을 소유하고 최종 push를 수행한다.
 
 구현에서는 `deviceId`나 `clientSessionId`를 connection 자체의 식별자로 사용하지 않는다. Realtime 연결마다 고유한 `connectionId`와 lease를 생성하고, 단일 활성 연결 정책이 필요한 경우 논리적 target ID는 현재 `connectionId`를 가리키는 pointer로 사용한다. Reconnect는 새 connection을 등록한 뒤 pointer를 교체하며, heartbeat와 disconnect는 자신의 connection / lease가 현재 값과 일치할 때만 갱신하거나 삭제한다.
 
@@ -238,7 +238,7 @@ Routing 판단은 한 곳에 모을 수 있지만, `AI Orchestrator`가 Streamin
 - [Server-driven AI](../concepts/server-driven-ai.md)
 - [Client Tool Integration](../concepts/client-integration.md)
 - [Design Decisions](summary.md)
-- [Realtime Service Result Delivery](../components/realtime-service/result-delivery.md)
+- [Messenger Client Ingress Result Delivery](../components/messenger-client-ingress/result-delivery.md)
 - [AI Orchestrator Result Router](../components/ai-orchestrator/result-router.md)
 - [Omni AI Server Result Event](../components/omni-ai-server/result-event.md)
-- [ADR 005. WebSocket Realtime Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)
+- [ADR 005. WebSocket Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)

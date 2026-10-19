@@ -17,7 +17,7 @@ Task 라우팅, Context Resolution, Workflow / Agent 실행, 결과 생성과 �
 - Runtime history와 checkpoint
 - Structured Result와 Stream Event 생성
 - timeout, cancellation, failure 처리
-- `triggerId`, `taskId`, `executionId` correlation과 logging
+- 실행 식별자 correlation과 logging. `triggerId / taskId / executionId` 분리는 Proposed ADR 004의 목표 모델이며 최종 schema는 아직 확정되지 않음
 
 ## Base Flow
 

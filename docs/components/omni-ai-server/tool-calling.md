@@ -4,7 +4,7 @@ Status: Planned
 
 Omni AI Server의 Tool Decision과 실행 재개 구조를 기록한다.
 
-Runtime의 Tool 요청, AI Orchestrator와의 계약, Tool 결과 수신 후 재개 흐름을 실제 구현 기준으로 정리한다.
+Runtime의 Tool 요청, AI Orchestrator와의 계약, Tool 결과 수신 후 재개 흐름의 계획된 공통 구조를 정리한다.
 
 Tool Calling은 Task Execution 도중 발생하는 suspend/resume 확장 흐름이며 독립적인 최상위 실행 경로가 아니다. 정해진 순서대로 Service API를 호출하는 Workflow는 Tool Calling으로 분류하지 않는다. LLM이 실행 중 Tool 필요 여부와 종류를 선택할 때 이 구조를 사용한다.
 

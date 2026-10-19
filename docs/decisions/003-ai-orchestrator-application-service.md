@@ -8,9 +8,9 @@ Status: Accepted
 
 초기에는 별도 AI Orchestrator layer를 두지 않고, AI 실행 판단과 Context Assembly 책임을 WebSocket Service와 Omni AI Server에 분산시키는 방안을 검토하였다.
 
-하지만 Messenger에는 WebSocket 기반 Client뿐 아니라 TCP 연결 기반의 TCP Realtime Service도 존재한다. 두 Client 경로 모두 동일한 AI 기능, 동일한 요청 / 응답 규격, 동일한 실행 정책을 제공해야 한다.
+하지만 Messenger에는 WebSocket 기반 Client가 연결되는 `WebSocket Service (WS)`뿐 아니라 기존 Native Client가 TCP로 연결되는 `TCP Service (NS)`도 존재한다. 두 Client 경로 모두 동일한 AI 기능, 동일한 요청 / 응답 규격, 동일한 실행 정책을 제공해야 한다.
 
-AI 실행 판단, Trigger Policy, Context Assembly, AiTask 생성, Execution Correlation을 각 realtime service에 분산하면 WebSocket 경로와 TCP 경로의 구현이 달라지고, 기능 추가 시 중복 구현과 정책 불일치가 발생할 수 있다.
+AI 실행 판단, Trigger Policy, Context Assembly, AiTask 생성, Execution Correlation을 `WebSocket Service (WS)`와 `TCP Service (NS)`에 각각 분산하면 두 경로의 구현이 달라지고, 기능 추가 시 중복 구현과 정책 불일치가 발생할 수 있다.
 
 또한 이 책임을 Omni AI Server로 넘기면 Python AI Runtime이 Messenger connection topology, channel별 session, product policy까지 알게 되어 AI Runtime과 Product Application 경계가 흐려진다.
 
@@ -24,15 +24,17 @@ AI Orchestrator 자체도 향후 Trigger, Policy, Context Assembly, Tool Relay, 
 
 AI Orchestrator는 Spring Boot 기반 신규 Application Service로 구현한다.
 
-WebSocket Service와 TCP Realtime Service는 각자의 connection, session, delivery 책임을 유지한다.
+`WebSocket Service (WS)`와 `TCP Service (NS)`는 각자의 connection, session, delivery 책임을 유지한다. 두 서비스를 함께 지칭하는 논리적 경계는 `Messenger Client Ingress`이며 별도 배포 서비스가 아니다.
 
 AI 실행 판단과 실행 규격은 AI Orchestrator layer에서 공통화한다.
+
+이 실행 판단은 source-owned Business Event의 성립 여부를 다시 판단한다는 뜻이 아니다. 현재 source owner가 자신이 소유한 상태 전이와 Event를 확정하고, AI Orchestrator는 확정된 Event에 공통 AI Policy와 Cross-domain Context를 적용해 특정 AiTask를 생성할지 판단한다.
 
 AI Orchestrator는 WebSocket Client와 TCP Client 모두에 대해 동일한 AI Use Case, AiTask schema, executionId, policy, context assembly, result contract를 제공한다.
 
 Omni AI Server는 channel 종류를 알지 않고, 실행이 확정된 AiTask를 처리하는 Python AI Runtime으로 유지한다.
 
-초기 Result Router는 `AI Orchestrator` 내부의 application module로 둔다. 이 module은 `routingRef`로 현재 Realtime Connection Registry owner를 resolve하고 Core NATS owner instance subject를 선택한다. Realtime session의 소유나 Client까지의 token stream proxy는 이 module의 책임이 아니며, 해당 책임은 WebSocket Service와 TCP Realtime Service에 남긴다.
+초기 Result Router는 `AI Orchestrator` 내부의 application module로 둔다. 이 module은 `routingRef`로 현재 Realtime Connection Registry owner를 resolve하고 Core NATS owner instance subject를 선택한다. Realtime session의 소유나 Client까지의 token stream proxy는 이 module의 책임이 아니며, 해당 책임은 `WebSocket Service (WS)`와 `TCP Service (NS)`에 남긴다.
 
 고빈도 streaming의 독립적인 확장 또는 장애 격리가 필요해지면 Result Router는 같은 `ResultEvent` 계약을 유지한 채 별도 `Realtime Delivery / Result Router` 배포 단위로 분리할 수 있다.
 
@@ -73,9 +75,9 @@ result-routing/
 
 ## Alternatives
 
-### Distribute orchestration into WebSocket Service and TCP Realtime Service
+### Distribute orchestration into WebSocket Service and TCP Service
 
-각 realtime service가 AI Trigger Policy, Context Assembly, AiTask 생성을 직접 처리한다.
+`WebSocket Service (WS)`와 `TCP Service (NS)`가 AI Trigger Policy, Context Assembly, AiTask 생성을 각각 직접 처리한다.
 
 장점:
 
@@ -86,7 +88,7 @@ result-routing/
 
 * WebSocket 경로와 TCP 경로에 AI 정책이 중복된다.
 * 동일 기능의 request / response 규격이 channel별로 달라질 수 있다.
-* 기능 추가 시 realtime service마다 구현과 테스트가 반복된다.
+* 기능 추가 시 두 Client ingress 서비스마다 구현과 테스트가 반복된다.
 
 ### Move orchestration into Omni AI Server
 
@@ -127,7 +129,7 @@ Omni AI Server가 Business Event, Client Request, Trigger Policy, Context Assemb
 
 * WebSocket Client와 TCP Client가 동일한 AI 기능 규격을 사용할 수 있다.
 * Channel-specific connection / delivery 책임과 AI execution policy를 분리할 수 있다.
-* AI 기능 추가 시 WebSocket Service와 TCP Realtime Service에 정책을 중복 구현하지 않아도 된다.
+* AI 기능 추가 시 `WebSocket Service (WS)`와 `TCP Service (NS)`에 정책을 중복 구현하지 않아도 된다.
 * Omni AI Server가 Messenger channel topology를 알 필요가 없다.
 * AI Runtime은 Prompt / Workflow / Agent 실행에 집중할 수 있다.
 * Java / Spring 기반 backend 운영 모델에서 policy, context assembly, execution correlation을 관리할 수 있다.
@@ -150,5 +152,5 @@ Omni AI Server가 Business Event, Client Request, Trigger Policy, Context Assemb
 ## Related
 
 * [Architecture](../overview.md)
-* [Service Boundary and Migration](../concepts/service-boundary-and-migration.md)
+* [Current Service Boundary](../concepts/current-service-boundary.md)
 * [AI Orchestrator Implementation](../components/ai-orchestrator/README.md)

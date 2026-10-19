@@ -59,7 +59,7 @@ Business Rule, Trigger Policy, permission, cooldown, dedup 판단은 Omni AI Ser
 - Messenger client session ownership
 - Product-facing conversation metadata ownership
 - Trigger Policy 판단
-- Domain Service state ownership
+- Messenger Business State ownership
 - Channel-specific result delivery
 
 Omni AI Server는 channel 종류를 알지 않고, AI Orchestrator가 전달한 AiTask와 tool result를 기준으로 AI Runtime 실행에 집중한다.

@@ -8,10 +8,10 @@ Event 수신, Trigger Policy, Context Assembly, AiTask 생성, 실행 연계의 
 
 ## 현재 적용 사례: Conversation Start
 
-`ai-orchestrator`의 `conversationstart` 패키지에 구현된 흐름이다. 방 입장 비즈니스 이벤트는 Realtime Service가 먼저 처리하며, Realtime Service가 AI Orchestrator의 REST API를 호출해 Conversation Start 실행을 요청한다. 따라서 전체 시스템 관점에서는 방 입장 이벤트로 시작하지만, AI Orchestrator 내부의 직접 진입점은 Business Event Consumer가 아니라 REST API다.
+`ai-orchestrator`의 `conversationstart` 패키지에 구현된 흐름이다. 방 입장 비즈니스 이벤트는 Messenger Client Ingress가 먼저 처리하며, `WebSocket Service (WS)` 또는 `TCP Service (NS)`가 AI Orchestrator의 REST API를 호출해 Conversation Start 실행을 요청한다. 따라서 전체 시스템 관점에서는 방 입장 이벤트로 시작하지만, AI Orchestrator 내부의 직접 진입점은 Business Event Consumer가 아니라 REST API다.
 
 ```text
-Realtime Service가 방 입장 비즈니스 이벤트 처리
+Messenger Client Ingress가 방 입장 비즈니스 이벤트 처리
   → AI Orchestrator의 POST /api/v1/conversation-starts 호출
   (roomSessionId, clientSessionId, userID, roomKey, chatType)
   → ConversationStartService.start()
@@ -41,7 +41,7 @@ Realtime Service가 방 입장 비즈니스 이벤트 처리
 
 같은 `roomSessionId`로 동일 사용자·방이 다시 요청하면 새 실행을 만들지 않고 기존 활성 실행을 반환한다. 같은 사용자·방에 새로운 `roomSessionId`로 요청하면 이전 활성 실행을 자동 취소하고 새 실행을 예약한다.
 
-방 퇴장에 따른 명시적 취소는 `roomSessionId`, `userID`, `roomKey`가 모두 일치하는 활성 실행만 대상으로 한다. 성공하면 실행을 `CANCELLED`로 변경하고 예약 작업을 취소한 뒤 `204 No Content`를 반환하며, 대상이 없거나 식별자가 일치하지 않으면 `404 Not Found`를 반환한다. 이미 AI 요청이 실행 중이면 요청 자체를 중단하지는 않지만, 이후 응답을 완료 처리하거나 Realtime Service로 전달하지 않는다. 이미 `COMPLETED` 또는 `FAILED`인 실행은 취소할 수 없다.
+방 퇴장에 따른 명시적 취소는 `roomSessionId`, `userID`, `roomKey`가 모두 일치하는 활성 실행만 대상으로 한다. 성공하면 실행을 `CANCELLED`로 변경하고 예약 작업을 취소한 뒤 `204 No Content`를 반환하며, 대상이 없거나 식별자가 일치하지 않으면 `404 Not Found`를 반환한다. 이미 AI 요청이 실행 중이면 요청 자체를 중단하지는 않지만, 이후 응답을 완료 처리하거나 Messenger Client Ingress로 전달하지 않는다. 이미 `COMPLETED` 또는 `FAILED`인 실행은 취소할 수 없다.
 
 ### 현재 구현 경계
 
@@ -56,13 +56,18 @@ Realtime Service가 방 입장 비즈니스 이벤트 처리
 
 ## 다음 적용 사례: Returned Message Topics
 
-Desktop Client의 `connectType 1, 2`에서 사용자 상태가 `AWAY/OFFLINE → ONLINE`으로 변경되면 자리비움 구간과 수신 쪽지를 확인한다. unread 메시지가 있으면 사용자에게 먼저 실행 여부를 확인하고, 유효한 `YES` 응답을 받은 경우에만 Topic Extraction AiTask를 생성한다.
+Messenger Client Ingress 내 Presence owner가 인증된 Desktop Client의 `connectType 1, 2`를 확인하고 `AWAY/OFFLINE → ONLINE` 전이와 자리비움 구간을 확정한다. AI Orchestrator는 확정된 `USER_RETURNED`를 재판정하지 않고 Returned Message Topics의 기능별 정책과 수신 쪽지를 확인한다. unread 메시지가 있으면 사용자에게 먼저 실행 여부를 확인하고, 유효한 `YES` 응답을 받은 경우에만 Topic Extraction AiTask를 생성한다.
 
 ```text
-WS/NS → AI Orchestrator REST API
-  → USER_RETURNED request
-  → Desktop / connectType 1, 2 확인
-  → absence period / min-max duration / expiration 확인
+WebSocket Service (WS) or TCP Service (NS)
+  → 인증된 Desktop / connectType 1, 2 확인
+  → AWAY/OFFLINE → ONLINE 전이 감지
+  → offlineSince / returnedAt / absencePeriodId 확정
+  → USER_RETURNED 확정
+  → AI Orchestrator REST API
+AI Orchestrator
+  → source event contract 검증
+  → feature-specific min-max duration / expiration 확인
   → Message Query Port
   → 현재 Message owner의 내부 DB 조회 Queue
   → unread 후보 선정과 messageSelectionRef 생성
@@ -76,10 +81,12 @@ WS/NS → AI Orchestrator REST API
   → Client가 로컬 삭제 상태를 반영해 결과 노출
 ```
 
-현재는 `USER_RETURNED` NATS JetStream Consumer가 구현되어 있지 않으므로 WS/NS가 공통 AI Orchestrator REST API를 호출한다. WS/NS별 AI Trigger Queue는 두지 않는다. REST retry는 동일한 `triggerId`를 사용해 멱등 처리한다. 향후 durable Trigger가 필요해지면 동일한 request 계약을 JetStream adapter로 확장할 수 있다.
+현재는 `USER_RETURNED` NATS JetStream Consumer가 구현되어 있지 않으므로 `WebSocket Service (WS)` 또는 `TCP Service (NS)`가 공통 AI Orchestrator REST API를 호출한다. 서비스별 AI Trigger Queue는 두지 않는다. REST retry는 동일한 `triggerId`를 사용해 멱등 처리한다. durable Trigger를 이 프로젝트에서 도입할 때는 동일한 request 계약을 JetStream adapter로 확장한다.
 
-현재 Messenger 구조의 DB 조회 Queue는 해당 Message owner가 계속 소유하고, AI Orchestrator는 이를 감싼 Message Query Port를 통해 조정할 뿐 쪽지 DB를 직접 조회하지 않는다. 향후 Message Service가 분리되면 Port의 infrastructure adapter만 Service API, gRPC 또는 Projection으로 교체한다.
+Messenger Client Ingress가 REST를 호출하는 행위는 복귀 사실을 확정해 AI 실행 후보를 제출하는 것이다. AI Orchestrator는 legacy `connectType`이나 Presence 원시 상태로 복귀를 다시 판단하지 않는다. Orchestrator의 source event 검증은 trusted producer, 필수 필드, 시간 구간 정합성을 확인하는 방어적 검증이다.
 
-`routingRef.connectionType`은 Realtime/Messenger 경계가 검증한 Desktop connection의 `connectType` 값을 담는다. Result Router는 Result 전달 시점에 논리 target의 현재 connection을 다시 조회하고 Registry record의 `connectionType`이 trusted `routingRef`와 일치할 때만 전달한다. 이 Use Case는 사용자 전체 connection에 broadcast하지 않는다.
+현재 Messenger 구조의 DB 조회 Queue는 해당 Message owner가 계속 소유하고, AI Orchestrator는 이를 감싼 Message Query Port를 통해 조정할 뿐 쪽지 DB를 직접 조회하지 않는다.
+
+`routingRef.connectionType`은 Messenger Client Ingress가 검증한 Desktop connection의 `connectType` 값을 담는다. Result Router는 Result 전달 시점에 논리 target의 현재 connection을 다시 조회하고 Registry record의 `connectionType`이 trusted `routingRef`와 일치할 때만 전달한다. 이 Use Case는 사용자 전체 connection에 broadcast하지 않는다.
 
 이 적용 사례의 상태는 `Planned`다. 상세 범위는 [Returned Message Topics Use Case](../../use-cases/02-returned-message-topics.md)에서 관리한다.

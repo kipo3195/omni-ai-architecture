@@ -29,7 +29,7 @@ Client LLM → ScheduleSpec → Orchestrator 검증·등록
 | Scheduler | 지정 시각에 실행 회차 Trigger |
 | Message owner | 기간 내 주간보고 대상 쪽지 제공 |
 | Omni AI Server | 주간보고 분류와 요약 생성 |
-| Realtime Service / Client | 결과 쪽지 전달, 보류 회차 확인 UI |
+| Messenger Client Ingress / Client | 현재 connection owner를 통한 결과 쪽지 전달, 보류 회차 확인 UI |
 
 ## Contracts
 

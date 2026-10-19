@@ -17,7 +17,7 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 다음과 같은 결정은 별도 ADR로 남긴다.
 
 - Queue 기술 또는 운영 방식 선택
-- Current WebSocket Service split / migration 순서
+- `Messenger Client Ingress` 내부의 WebSocket / TCP connection 및 delivery 계약 변경
 - AI Orchestrator runtime 선택
 - AI Orchestrator boundary와 HA 전략
 - NATS JetStream / Core NATS 사용 범위
@@ -29,14 +29,15 @@ ADR은 "무엇을 선택했는가"뿐 아니라 "왜 그렇게 선택했는가"�
 - Stream reconnect / resume 정책
 - Chatbot history retention 정책
 - Tool Runtime / Server Tool Adapter 통신 방식과 권한 경계
-- Label / Address Book 분리 여부
 - unread count 계산 주체
-- file-service의 AI Context 연계 범위
+- 현재 File Business owner의 AI Context 연계 범위
 - Context Store 도입 여부
 - Client Tool Delivery 통신 방식 선택
 - Agent Runtime lifecycle 변경
 - retry / timeout / duplicate 방지 정책 변경
 - 비용이나 latency에 큰 영향을 주는 구조 변경
+
+현재 존재하지 않는 User / Authentication / File 등의 물리 서비스 분리·통합 결정은 이 Repository의 ADR 범위에 포함하지 않는다.
 
 일시적인 문제와 해결 과정은 [Troubleshooting](../troubleshooting.md)에 기록한다.
 
@@ -91,5 +92,5 @@ Status: Proposed | Accepted | Superseded
 - [002. Tool Runtime Ownership and Client Tool Dispatch](002-tool-runtime-ownership-client-tool-dispatch.md)
 - [003. AI Orchestrator as an Application Service](003-ai-orchestrator-application-service.md)
 - [004. AI Execution and Context Identifier Separation](004-ai-execution-and-context-identifiers.md)
-- [005. WebSocket Realtime Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)
+- [005. WebSocket Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)
 - [006. AI Feature Enablement Policy and User Preference Strategy](006-ai-feature-enablement-policy-and-user-preference.md)

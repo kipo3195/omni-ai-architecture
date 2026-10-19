@@ -1,4 +1,4 @@
-# Realtime Service User AI Settings
+# Messenger Client Ingress User AI Settings
 
 Status: Planned
 
@@ -6,7 +6,7 @@ Status: Planned
 
 ## Purpose
 
-Realtime Service가 인증된 사용자의 AI ON/OFF 설정을 변경하고 DB와 Redis에 반영하는 구현 책임을 정의한다.
+`Messenger Client Ingress` 내부의 현재 User Policy owner가 인증된 사용자의 AI ON/OFF 설정을 변경하고 DB와 Redis에 반영하는 구현 책임을 정의한다.
 
 AI 실행 여부의 최종 판단과 Runtime 조회 방식은 [ADR 006](../../decisions/006-ai-feature-enablement-policy-and-user-preference.md)을 따른다.
 
@@ -14,7 +14,7 @@ AI 실행 여부의 최종 판단과 Runtime 조회 방식은 [ADR 006](../../de
 
 ## Responsibility
 
-Realtime Service는 다음 책임을 가진다.
+현재 User Policy owner는 다음 책임을 가진다.
 
 - 사용자 AI 설정 조회 및 변경 API 제공
 - 인증 context의 tenant와 user 기준으로 요청 검증
@@ -29,7 +29,7 @@ Client가 전달한 tenantId 또는 userId를 저장 대상의 authoritative 값
 
 ```text
 Client
-→ Realtime Service
+→ Messenger Client Ingress의 현재 User Policy owner
 → authentication / authorization
 → User Policy DB update and commit
 → Redis cache update
@@ -51,11 +51,11 @@ Cache value에는 ON/OFF 상태를 저장하고 설정된 TTL을 적용한다. D
 
 Client에 현재 설정을 제공하는 조회 API는 인증된 tenant와 user를 기준으로 DB의 값을 반환한다. Redis는 AI 실행 시 Runtime 조회를 위한 cache이며 사용자 설정의 Source of Truth로 사용하지 않는다.
 
-AI Orchestrator의 정책 조회 흐름은 Realtime Service API 처리와 분리한다.
+AI Orchestrator의 정책 조회 흐름은 Messenger Client Ingress API 처리와 분리한다.
 
 ```text
 Client setting read / write
-→ Realtime Service
+→ Messenger Client Ingress의 현재 User Policy owner
 
 AI execution policy read
 → AI Orchestrator
@@ -89,5 +89,5 @@ Redis 갱신 실패 시 기존 cache 값이 TTL까지 남을 수 있다. OFF 변
 ## Related
 
 - [ADR 006. AI Feature Enablement Policy and User Preference Strategy](../../decisions/006-ai-feature-enablement-policy-and-user-preference.md)
-- [Realtime Service Implementation](README.md)
+- [Messenger Client Ingress Implementation](README.md)
 - [AI Orchestrator Policy](../ai-orchestrator/policy.md)

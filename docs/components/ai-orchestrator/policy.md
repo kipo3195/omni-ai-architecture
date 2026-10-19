@@ -10,7 +10,7 @@ AI Orchestrator가 Global, Feature, User Policy를 조회하고 AI 실행 여부
 
 정책의 Source of Truth와 cache 전략은 [ADR 006](../../decisions/006-ai-feature-enablement-policy-and-user-preference.md)을 따른다.
 
-현재 Conversation Start에는 tenant Global Policy 평가만 연결되어 있다. Feature/User Policy, cooldown과 공통 Trigger Policy는 설계 및 구현 진행 중이며 아래 내용은 완성된 Target flow를 함께 설명한다.
+현재 Conversation Start에는 tenant Global Policy 평가만 연결되어 있다. Feature/User Policy, cooldown과 공통 Trigger Policy는 설계 및 구현 진행 중이며 아래 내용은 계획된 전체 policy flow를 함께 설명한다.
 
 ---
 
@@ -144,4 +144,4 @@ Redis 장애 시 DB fallback 요청이 급증하지 않도록 timeout, connectio
 
 - [ADR 006. AI Feature Enablement Policy and User Preference Strategy](../../decisions/006-ai-feature-enablement-policy-and-user-preference.md)
 - [AI Orchestrator Implementation](README.md)
-- [Realtime Service User AI Settings](../realtime-service/user-ai-settings.md)
+- [Messenger Client Ingress User AI Settings](../messenger-client-ingress/user-ai-settings.md)

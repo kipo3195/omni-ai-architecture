@@ -1,6 +1,6 @@
 # NN. Use Case Name
 
-> 이 파일을 새 Use Case 디렉터리의 `README.md`로 복사하여 사용한다.
+> 이 파일을 `NN-short-use-case-name.md` 형식의 새 파일로 복사하여 사용한다.
 
 진행 상태는 [Roadmap](../roadmap.md)에서 관리한다.
 
@@ -10,16 +10,17 @@
 
 ## Trigger
 
-- 시작 이벤트 또는 사용자 요청
-- 실행에 필요한 선행 상태
-- 실행하지 않는 조건
+- Source owner가 소유한 상태와 Business Event 성립 조건
+- Source owner가 확정해야 하는 식별자, 시각, trusted context
+- AI Orchestrator가 확정된 Event에 적용할 기능별 실행 / skip 조건
+- Source Event 확정 조건과 AI 기능 정책을 같은 정책으로 표현하지 않음
 
 ## End-to-End Flow
 
 ```text
-Trigger
-→ Business Logic
-→ AI Orchestrator
+Raw State Change / Client Request
+→ 현재 Business owner 또는 Messenger Client Ingress: Business Event / trusted context 확정
+→ AI Orchestrator: source event contract 검증과 AI 기능 정책
 → Omni AI Server
 → Result Delivery
 → Client
@@ -29,15 +30,15 @@ Trigger
 
 | Component | Responsibility |
 | --- | --- |
-| Business Service | |
-| AI Orchestrator | |
+| 현재 Business owner / Messenger Client Ingress | 소유한 상태 전이, Business Event, trusted context 확정 |
+| AI Orchestrator | Source Event를 재판정하지 않고 contract 검증, AI 기능 정책, Context Assembly, AiTask lifecycle 관리 |
 | Omni AI Server | |
-| Realtime Service | |
+| Messenger Client Ingress | `WebSocket Service (WS)` 또는 `TCP Service (NS)`의 ingress / delivery 책임 |
 | Client | |
 
 ## Contracts
 
-Event, request, `AiTask`, structured result와 필요한 식별자를 기록한다.
+Event, request, `AiTask`, structured result와 필요한 식별자를 기록한다. Event contract에는 source owner가 확정한 사실과 Orchestrator가 적용할 기능 정책 입력을 구분한다.
 
 ```text
 triggerId

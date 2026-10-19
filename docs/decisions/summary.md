@@ -21,11 +21,11 @@ ADR 상태는 `Proposed → Accepted → Superseded`만 사용한다.
 
 | Direction | Source of truth |
 | --- | --- |
-| WebSocket Service 책임 분리는 즉시 작업이 아닌 Target migration으로 둔다. | [Service Boundary and Migration](../concepts/service-boundary-and-migration.md) |
-| Business State는 각 Domain Service가 소유하고 Orchestrator는 Cross-service Use Case를 조정한다. | [Architecture Overview](../overview.md) |
+| 현재 Client ingress는 `WebSocket Service (WS)`와 `TCP Service (NS)`이며, 두 서비스를 포괄하는 논리적 경계는 `Messenger Client Ingress`다. | [Current Service Boundary](../concepts/current-service-boundary.md) |
+| Business State는 현재 해당 기능을 구현한 Messenger Service가 소유하고 Orchestrator는 Cross-domain AI Use Case를 조정한다. | [Architecture Overview](../overview.md) |
 | Business Event와 AiTask를 분리하고 정책을 통과한 실행만 Task로 만든다. | [AiTask and Queue](../concepts/ai-task-and-queue.md) |
 | Conversation Product Metadata와 AI Runtime State를 분리한다. | [Architecture Overview](../overview.md) |
-| Durable Trigger는 JetStream, Target realtime delivery는 Core NATS를 사용한다. | [Architecture Overview](../overview.md) |
+| Durable Trigger는 JetStream, 계획된 realtime delivery는 Core NATS를 사용한다. | [Architecture Overview](../overview.md) |
 | Client Tool은 실행 방식이 아니라 Workflow/Agent가 사용하는 Provider다. | [Client Tool Integration](../concepts/client-integration.md) |
-| Client는 Omni AI Server와 직접 연결하지 않고 Realtime Service의 인증된 session을 사용한다. | [Client Tool Integration](../concepts/client-integration.md) |
+| Client는 Omni AI Server와 직접 연결하지 않고 `Messenger Client Ingress`의 인증된 session을 사용한다. | [Client Tool Integration](../concepts/client-integration.md) |
 | 예측 가능한 기능은 Workflow로 시작하고 Agent Runtime과 Worker 분리는 검증된 필요에 따라 확장한다. | [Roadmap](../roadmap.md) |
