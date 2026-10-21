@@ -13,7 +13,7 @@ Event 수신, Trigger Policy, Context Assembly, AiTask 생성, 실행 연계의 
 ```text
 Messenger Client Ingress가 방 입장 비즈니스 이벤트 처리
   → AI Orchestrator의 POST /api/v1/conversation-starts 호출
-  (roomSessionId, clientSessionId, userID, roomKey, chatType)
+  (roomSessionId, roomKey, chatType, routingRef)
   → ConversationStartService.start()
   → roomSessionId로 활성 실행 조회
       ├─ 같은 사용자·방의 실행이 존재: 중복 입장 요청으로 판단하고 기존 실행 반환
@@ -22,7 +22,7 @@ Messenger Client Ingress가 방 입장 비즈니스 이벤트 처리
   → 신규 입장 요청과 동일한 사용자·방의 이전 활성 실행 조회
       ├─ 이전 실행 존재: 이전 실행과 예약 작업 취소
       └─ 이전 실행 없음: 그대로 진행
-  → RoutingRef와 executionId 생성
+  → routingRef를 CLIENT_SESSION_CURRENT와 ROOM_SESSION scope로 정규화하고 executionId 생성
   → AiExecution을 SCHEDULED 상태로 메모리에 저장
   → 설정된 시간 뒤 스케줄러가 실행
   → 예약 실행과 현재 roomSession 실행의 일치 여부 확인
@@ -45,7 +45,7 @@ Messenger Client Ingress가 방 입장 비즈니스 이벤트 처리
 
 ### 현재 구현 경계
 
-- 기능 활성화 설정과 지연 실행을 사용하고, 예약 실행 직전에 Global AI Policy를 평가한다. 현재 `tenantId`는 인증 context가 아니라 `RoutingRefFactory`의 configured default tenant에서 가져오고, `clientSessionId`는 Controller request body로 받는다. 이 package 안에서는 두 값을 검증된 인증 context에서 복원하지 않는다. Feature/User Policy, `cooldown`, 권한 판단과 공통 Trigger Policy는 아직 연결되지 않았다. Conversation Start 전용 Policy Provider와 관련 모델은 선언 단계이며, `roomSessionId` 기반 멱등 처리와 동일 사용자·방의 이전 실행 취소는 `ConversationStartService`에 직접 구현되어 있다.
+- 기능 활성화 설정과 지연 실행을 사용하고, 예약 실행 직전에 Global → Feature → User AI Policy를 평가한다. 현재 `tenantId`, `userId`, Client session target은 Messenger Client Ingress가 구성한 `routingRef`에서 읽으며 AI Orchestrator가 별도의 인증 token을 검증해 복원하지는 않는다. `cooldown`, 권한 판단과 공통 Trigger Policy는 아직 연결되지 않았다. `roomSessionId` 기반 멱등 처리와 동일 사용자·방의 이전 실행 취소는 `ConversationStartService`에 직접 구현되어 있다.
 - 최근 메시지 조회 Port와 방 Presence 확인 Port는 호출되지 않는다. 현재 Context Assembly는 `executionId`, `roomSessionId`, 사용자·방 식별자, 입장 시각, 추천 유형과 빈 메시지 목록으로 제한된다. 이 중 AI HTTP 요청에는 `executionId`, 사용자·방 식별자, 추천 유형과 빈 메시지 목록만 전달된다.
 - 공통 `AiTask`와 `triggerId / taskId / executionId` 상관관계 모델은 아직 없다. 대신 공통 `AiExecution`과 `RoutingRef`를 사용해 실행 상태와 결과 전달 대상을 연결한다. `executionId`는 Conversation Start 전용 AI 요청의 `session_id`로 전달된다.
 - AI 결과는 메모리의 실행 객체에 저장된 후 공통 `AiResultRouter`로 전달된다. 라우터는 Redis에서 `clientSessionId`의 현재 Realtime 연결과 소유 인스턴스를 확인하고, 설정된 REST 엔드포인트로 `CONVERSATION_START_COMPLETED` 이벤트를 전달한다. 이 REST adapter가 현재 활성 구현이며 NATS adapter는 placeholder다. `ConversationSuggestionSender`와 `RealtimeMessageSuggestionClient`는 이 경로에서 사용되지 않는다.
@@ -56,7 +56,7 @@ Messenger Client Ingress가 방 입장 비즈니스 이벤트 처리
 
 ## 다음 적용 사례: Returned Message Topics
 
-Messenger Client Ingress 내 Presence owner가 인증된 Desktop Client의 `connectType 1, 2`를 확인하고 `AWAY/OFFLINE → ONLINE` 전이와 자리비움 구간을 확정한다. AI Orchestrator는 확정된 `USER_RETURNED`를 재판정하지 않고 Returned Message Topics의 기능별 정책과 수신 쪽지를 확인한다. unread 메시지가 있으면 사용자에게 먼저 실행 여부를 확인하고, 유효한 `YES` 응답을 받은 경우에만 Topic Extraction AiTask를 생성한다.
+Messenger Client Ingress 내 Presence owner가 인증된 Desktop Client의 `connectType 1, 2`를 확인하고 `AWAY/OFFLINE → ONLINE` 전이와 자리비움 구간을 확정한다. AI Orchestrator는 확정된 `USER_RETURNED`를 재판정하지 않고 Returned Message Topics의 기능별 정책과 수신 쪽지를 확인한다. unread 메시지가 있으면 사용자에게 먼저 실행 여부를 확인하고, 유효한 `YES` 응답을 받은 경우에만 stable `executionId`로 AI 실행을 dispatch한다. 공통 AiTask 연결은 목표 구조다.
 
 ```text
 WebSocket Service (WS) or TCP Service (NS)
@@ -75,7 +75,7 @@ AI Orchestrator
       └─ N건: AWAITING_CONFIRMATION 팝업 전달
   → Client YES
   → selection의 현재 readDate와 관계없이 Context Assembly
-  → RETURNED_MESSAGE_TOPICS AiTask
+  → RETURNED_MESSAGE_TOPICS execution dispatch (향후 공통 AiTask)
   → Topic Digest + Priority 결과 생성
   → routingRef의 target과 connectionType으로 현재 owner resolve
   → Client가 로컬 삭제 상태를 반영해 결과 노출
@@ -89,4 +89,4 @@ Messenger Client Ingress가 REST를 호출하는 행위는 복귀 사실을 확�
 
 `routingRef.connectionType`은 Messenger Client Ingress가 검증한 Desktop connection의 `connectType` 값을 담는다. Result Router는 Result 전달 시점에 논리 target의 현재 connection을 다시 조회하고 Registry record의 `connectionType`이 trusted `routingRef`와 일치할 때만 전달한다. 이 Use Case는 사용자 전체 connection에 broadcast하지 않는다.
 
-이 적용 사례의 상태는 `Planned`다. 상세 범위는 [Returned Message Topics Use Case](../../use-cases/02-returned-message-topics.md)에서 관리한다.
+이 적용 사례는 AI Orchestrator의 REST ingress, JDBC lifecycle/selection persistence, Message Query adapter와 confirmation/application 상태 전이까지 구현된 `In Progress` 상태다. 실제 confirmation sender, Omni AI Server execution gateway, result sender와 Client E2E는 아직 연결되지 않았다. 상세 범위는 [Returned Message Topics Use Case](../../use-cases/02-returned-message-topics.md)에서 관리한다.

@@ -24,7 +24,7 @@ ROOM_ENTERED / ROOM_LEFT
 
 | Component | Responsibility |
 | --- | --- |
-| Messenger Business Logic | 방 입장·퇴장 사실과 session 식별자 제공 |
+| Messenger Business Logic | 방 입장·퇴장 사실과 인증된 Client context에서 구성한 `routingRef` 제공 |
 | AI Orchestrator | 실행 예약, 취소, Context 구성, AI 호출, 유효한 결과 판정 |
 | Omni AI Server | Conversation Start 데이터 생성 |
 | Messenger Client Ingress | `WebSocket Service (WS)` 또는 `TCP Service (NS)`에서 현재 session 조회와 Client 전달 |
@@ -32,7 +32,26 @@ ROOM_ENTERED / ROOM_LEFT
 
 ## Contracts
 
-최소 correlation 후보는 `userId`, `roomKey`, `roomSessionId`, `triggerId`, `executionId`다. 구체 schema는 구현 과정에서 확정한다.
+현재 방 입장 REST 계약은 다음과 같다.
+
+```text
+POST /api/v1/conversation-starts
+
+roomSessionId
+roomKey
+chatType (선택)
+routingRef
+  tenantId
+  userId
+  targetRef
+  connectionType (선택)
+```
+
+`routingRef`는 owner와 delivery target의 단일 입력 출처다. 현재 HTTP adapter는 문자열 `targetRef`를 `CLIENT_SESSION_CURRENT`의 `clientSessionId`로 변환하고, `roomSessionId`로 `ROOM_SESSION` scope를 구성한다. Conversation Start는 특정 Desktop connection type으로 전달을 제한하지 않으므로 `connectionType`을 요구하지 않는다.
+
+현재 단계에서는 Messenger Client Ingress가 인증된 Client context로 구성한 `routingRef`를 service-to-service 요청 body에 전달한다. 향후 AI Orchestrator의 인증 계약이 확정되면 `tenantId`, `userId`는 검증된 인증 context에서 얻고 `routingRef`에는 순수 delivery target만 남긴다. Client가 제출한 임의의 owner 또는 routing identifier를 신뢰한다는 의미가 아니다.
+
+방 퇴장 계약은 아직 `DELETE /api/v1/conversation-starts/{roomSessionId}?userID=...&roomKey=...` 형식이며, 인증 context 기반 owner 추출로 전환하는 작업은 별도 범위다. `executionId`는 AI Orchestrator가 방 입장 요청을 수락할 때 생성한다.
 
 ## State and Idempotency
 
@@ -81,9 +100,9 @@ Omni AI Server 실패나 timeout은 실행 실패로 기록하고 추천 없이 
 
 ## Current Implementation Gap
 
-현재 Orchestrator는 REST ingress, 메모리 Repository, 프로세스 내부 Scheduler를 사용한다. 동일 `roomSessionId` 멱등 처리, 재입장 시 이전 실행 취소, 실행 직전 Global Policy 확인, Omni AI Server 호출과 REST 기반 Result Delivery까지 구현되어 있다.
+현재 Orchestrator는 REST ingress, 메모리 Repository, 프로세스 내부 Scheduler를 사용한다. 동일 `roomSessionId` 멱등 처리, 재입장 시 이전 실행 취소, 실행 직전 Global → Feature → User Policy 확인, Omni AI Server 호출과 REST 기반 Result Delivery까지 구현되어 있다. 방 입장 요청의 owner와 Client session은 최상위 개별 필드가 아니라 공통 `routingRef`에서 읽는다.
 
-남은 범위는 최근 메시지·Presence Context 조회, Feature/User Policy와 cooldown, 검증된 인증 context의 `tenantId`·`clientSessionId` 연결, 공통 AiTask 및 전체 correlation, durable 실행 저장소와 Scheduler, 계획된 Core NATS delivery, 실패 retry와 최종 Client Suggestion E2E 검증이다.
+남은 범위는 최근 메시지·Presence Context 조회, cooldown과 권한 판단, 검증된 인증 context에서 `tenantId`·`userId`를 복원하는 계약, 공통 AiTask 및 전체 correlation, durable 실행 저장소와 Scheduler, 계획된 Core NATS delivery, 실패 retry와 최종 Client Suggestion E2E 검증이다. 등록되어 있는 Redis Conversation Start Repository는 아직 구현되지 않았고 `@Primary` 메모리 Repository가 사용된다.
 
 ## Open Questions
 

@@ -40,8 +40,8 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
    └─ N건: 현재 요청 connection으로 요약 확인 팝업 전달
 → Client: YES / NO
    ├─ NO 또는 timeout: DECLINED / EXPIRED
-   └─ YES: RETURNED_MESSAGE_TOPICS AiTask 생성
-→ Message owner를 통해 messageSelectionRef의 AI Context 조회
+   └─ YES: stable executionId 생성 후 RETURNED_MESSAGE_TOPICS 실행 dispatch
+→ 저장된 messageSelectionRef와 source item key로 AI 실행 입력 구성
 → Omni AI Server: Topic Extraction + Priority
 → AI Orchestrator Result Router
 → routingRef와 동일한 connectionType의 현재 connection owner resolve
@@ -73,11 +73,10 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
 이 요청은 Presence owner가 적용 대상 connection과 복귀 상태 전이를 확정한 뒤 생성하는 source-qualified Event다. AI Orchestrator는 Client가 보낸 원시 상태나 legacy `connectType`으로 복귀 여부를 다시 계산하지 않는다.
 
 ```text
+POST /api/v1/returned-messages
+
 requestId
 triggerId
-eventType: USER_RETURNED
-tenantId
-userId
 absencePeriodId
 offlineSince
 returnedAt
@@ -90,9 +89,11 @@ routingRef
   connectionType: 1 | 2
 ```
 
-`routingRef.connectionType`은 Client request payload를 그대로 신뢰하지 않고 Messenger Client Ingress가 인증된 connection context에서 설정한다. Result Router는 target reference로 현재 connection을 찾은 뒤 Connection Registry의 `connectionType`이 이 값과 일치하는지 검증한다.
+REST endpoint 자체가 `USER_RETURNED`를 나타내므로 현재 HTTP body에 별도 `eventType`을 두지 않는다. `routingRef.tenantId`, `routingRef.userId`가 owner의 단일 입력 출처이며 최상위에 같은 값을 중복하지 않는다. 현재 단계에서는 Messenger Client Ingress가 source-qualified service request를 구성하고, 향후 인증 계약에서는 owner를 검증된 인증 context에서 복원한다.
 
-### Message Query Result
+`routingRef.connectionType`은 Returned Message Topics에서 필수다. Client request payload를 그대로 신뢰하지 않고 Messenger Client Ingress가 인증된 connection context에서 설정한다. Result Router는 target reference로 현재 connection을 찾은 뒤 Connection Registry의 `connectionType`이 이 값과 일치하는지 검증한다.
+
+### Message Selection Result
 
 ```text
 absencePeriodId
@@ -104,23 +105,45 @@ selectionExpiresAt
 
 `readDate == '00000000000000'` 같은 저장소 표현은 Message owner 내부 adapter가 unread 조건으로 해석한다. AI Use Case 계약에는 원시 sentinel 값을 노출하지 않는다.
 
-`messageSelectionRef`는 복귀 확인 시점에 unread였던 메시지 key 집합 또는 그 집합을 가리키는 짧은 수명의 reference다. 대량의 원문을 Trigger나 사용자 확인 요청에 직접 싣지 않는다.
+현재 WebSocket Service query는 unread 메시지 key 목록을 반환한다. AI Orchestrator adapter가 해당 목록을 저장하면서 `messageSelectionRef`, `selectedAt`, `selectionExpiresAt`을 생성하므로 위 구조는 Orchestrator의 `MessageSelection` port 결과다. `messageSelectionRef`는 복귀 확인 시점에 unread였던 메시지 key 집합을 가리키는 짧은 수명의 reference다. 대량의 원문을 Trigger나 사용자 확인 요청에 직접 싣지 않는다.
 
 ### User Confirmation
 
 ```text
-requestId
+POST /api/v1/returned-messages/{requestId}/confirmations
+
 absencePeriodId
+confirmationId
 messageSelectionRef
-unreadCount
 decision: YES | NO
-routingRef
 decidedAt
+routingRef
+  tenantId
+  userId
+  targetRef
+  connectionType: 1 | 2
 ```
 
 확인 응답은 인증된 현재 connection에서 받아야 하며 `requestId + absencePeriodId`로 중복 응답을 차단한다. `NO`는 정상 종료이고, 제한 시간 내 응답이 없으면 `EXPIRED`로 종료한다.
 
-### AiTask and Result
+### Current Execution Command and Planned AiTask
+
+현재 구현은 공통 `AiTask`를 생성하지 않고 stable `executionId`를 저장한 뒤 다음 실행 command를 `AiExecutionGateway`로 전달한다.
+
+```text
+ExecutionCommand
+  requestId
+  triggerId
+  executionId
+  tenantId
+  userId
+  absencePeriodId
+  messageSelectionRef
+  selectedItems[]
+  routingRef
+```
+
+공통 실행 계약이 연결된 이후의 목표 `AiTask`는 다음과 같다.
 
 ```text
 AiTask
@@ -179,15 +202,19 @@ AI Orchestrator는 Omni AI Server 호출 전에 다음 정책을 평가한다.
 
 ```text
 DETECTED
-→ SKIPPED_POLICY
-| SKIPPED_NO_MESSAGES
+→ SKIPPED_NO_MESSAGES
+| EXPIRED
+| FAILED
 | AWAITING_CONFIRMATION
-    → DECLINED
+    → BLOCKED_BY_POLICY
+    | DECLINED
     | EXPIRED
     | PROCESSING
-        → COMPLETED
+        → DELIVERY_PENDING
+            → COMPLETED
+            | DELIVERY_FAILED
         | FAILED
-        | DELIVERY_FAILED
+        | CANCELLED
 ```
 
 - 복귀 구간은 `tenantId + userId + absencePeriodId`를 idempotency key로 사용한다.
@@ -220,7 +247,8 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 확인 팝업과 AI 결과는 모든 사용자 연결에 broadcast하지 않는다. `routingRef`에 담긴 논리 target과 `connectionType`을 사용해 요청한 Desktop Client와 같은 타입의 현재 connection으로 전달한다.
 
-- 현재 구현: Result Router가 Redis에서 현재 connection owner를 조회하고 해당 instance REST endpoint로 전달
+- 공통 구현: Result Router가 Redis에서 현재 connection owner를 조회하고 해당 instance REST endpoint로 전달
+- Returned Message 현재 연결 상태: `ReturnedMessageResultSender`의 실제 adapter가 없어 위 공통 라우팅 경로와 아직 연결되지 않음
 - 계획된 경로: 같은 resolution 이후 Core NATS owner-instance subject로 전달
 - Result 처리 시점에 현재 owner를 다시 조회하며 Trigger source instance를 최종 target으로 사용하지 않는다.
 - targetRef는 인증 session 또는 device 같은 논리 target을 식별하고, `connectionType`은 선택된 connection에 대한 추가 검증 조건이다.
@@ -270,7 +298,9 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ## Current Implementation Gap
 
-Presence owner의 Desktop connection 적용 대상 판단, 복귀 Event 확정과 자리비움 구간 관리, USER_RETURNED REST endpoint, DB 조회 Queue adapter를 연결한 Message Query Port, 사용자 확인 lifecycle, Topic Extraction/우선순위 Workflow와 connectionType 검증을 포함한 결과 전달이 아직 구현되지 않았다. NATS JetStream Trigger Consumer는 현재 구현 범위가 아니다.
+AI Orchestrator에는 `USER_RETURNED` REST endpoint, JDBC lifecycle 및 selection 저장소, 기능·사용자 정책과 permission 평가, WebSocket Service DB 조회 API를 연결한 Message Query adapter, confirmation 상태 전이, 실행 correlation과 recovery/maintenance 흐름이 구현되어 있다. 공통 Result Router의 Redis connection resolution과 `connectionType` 검증도 구현되어 있다.
+
+아직 연결되지 않은 범위는 Presence owner의 Desktop 적용 대상 판단과 복귀 Event 생성, 실제 confirmation delivery adapter, Omni AI Server 실행·reconciliation adapter, Returned Message result delivery adapter, Topic Extraction/우선순위 Workflow와 전체 Client E2E다. 해당 outbound port가 설정되지 않으면 현재 fallback 구현은 전송 실패 또는 `UNKNOWN` 실행 상태를 반환한다. NATS JetStream Trigger Consumer도 현재 구현 범위가 아니다.
 
 ## Open Questions
 
