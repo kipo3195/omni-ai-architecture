@@ -72,6 +72,24 @@ executionId
 - 입력부터 사용자 결과까지 검증 가능한 완료 조건
 - 실패, 중복, 취소 경로의 완료 조건
 
+## System Integration Verification
+
+이 Use Case의 System Integration Verification은 개별 Component의 내부 동작이 아니라, 실제 서비스 경계를 거쳐 Trigger 또는 사용자 요청부터 최종 결과 전달까지 전체 Use Case가 완성되는지를 검증한다.
+
+핵심 서비스 간 호출 경로에 Mock 또는 Stub을 사용하지 않으며, 각 단계에서 생성·전달되는 `triggerId`, `taskId`, `executionId` 등의 Correlation 정보가 일관되게 연결되어 전체 흐름을 추적할 수 있어야 한다.
+
+검증은 해당 Use Case의 Acceptance Criteria를 기준으로 수행하며, 실패하거나 검증하지 못한 경계는 별도로 기록한다.
+
+| 항목 | 값 |
+|---|---|
+| Status | Planned |
+| Scope | 실제 서비스 경계를 End-to-End 순서로 기록 |
+| Environment | - |
+| Component Versions / Commits | - |
+| Last Verified At | - |
+| Evidence | - |
+| Known Gaps | - |
+
 ## Current Implementation Gap
 
 현재 코드에서 동작하는 부분과 목표 사이의 차이를 기록한다. 구현이 변경될 때 함께 갱신한다.

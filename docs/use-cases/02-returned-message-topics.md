@@ -296,11 +296,84 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 - Topic Digest에서 노출된 원본 메시지로 이동할 수 있다.
 - 우선순위와 요약을 원본 메시지까지 추적할 수 있다.
 
+## Presence Trigger Verification Contract
+
+Messenger Client Ingress의 Presence owner는 다음 계약을 검증해야 한다.
+
+| 구분 | 입력/조건 | 기대 결과 |
+|---|---|---|
+| 적용 대상 | 인증된 `connectionType` 1 또는 2 | Presence Trigger 판단 수행 |
+| 비대상 | `connectionType` 1, 2 외의 연결 | `USER_RETURNED` 미생성 |
+| OFFLINE | state 0 | 부재 구간 시작 |
+| ONLINE | state 1 | 기존 부재 구간이 있을 때만 `USER_RETURNED` 생성 |
+| AWAY | state 2~9 | 부재 구간 시작 |
+| 반복 부재 상태 | AWAY/OFFLINE 간 전이 | 최초 `offlineSince`와 `absencePeriodId` 유지 |
+| 비정상 종료 | 명시적 state 요청 없이 disconnect | current connection일 때 부재 구간 시작 |
+| stale 종료 | current가 아닌 과거 connection disconnect | 부재 구간 미생성 |
+| AT 재발급 | Refresh Token의 SID로 Access Token 재발급 | SID 유지 |
+| SID 변경 | 재인증 후 새 SID, 동일 user/type 복귀 | 기존 부재 종료, 새 SID로 routing |
+| connectionType 변경 | type 1 부재 후 type 2 ONLINE | type 1 부재를 종료하지 않음 |
+| 중복 ONLINE | 동일 부재 구간에 대한 복수 복귀 | Trigger 최대 1회 |
+
+부재 상태의 식별 단위는 `tenantId + userId + connectionType`이다. `clientSessionId`는 인증된 current connection 조회와 `routingRef.targetRef`에 사용하며, 부재 구간의 식별자로 사용하지 않는다.
+
+Redis의 부재 정보 TTL은 AI Orchestrator의 `maxAbsenceDuration`보다 길어야 한다. TTL이 더 짧으면 Orchestrator가 장기 부재 정책을 판단하기 전에 Presence owner가 Trigger 근거를 소실한다.
+
+### Verification Ownership
+
+| 검증 범위 | 소유 Component/Repository |
+|---|---|
+| 상태 계약, SID, connectionType, disconnect/reconnect, Redis 부재 구간, REST retry | WebSocket Service Presence Trigger Verification |
+| source contract, min/max absence, Trigger expiration, lifecycle 멱등성 | AI Orchestrator Returned Message Lifecycle Verification |
+| 실제 Client 복귀에서 확인, AI 실행과 결과 routing까지 | Cross-component E2E Verification |
+
+## System Integration Verification
+
+Returned Message Topics의 System Integration Verification은 개별 Component의 내부 동작이 아니라, 실제 서비스 경계를 거쳐 사용자 확인부터 Topic Digest 전달까지 전체 Use Case가 완성되는지를 검증한다.
+
+핵심 서비스 간 호출 경로에 Mock 또는 Stub을 사용하지 않으며, 각 단계에서 생성·전달되는 `triggerId`, `absencePeriodId`, `executionId` 등의 Correlation 정보가 일관되게 연결되어 전체 흐름을 추적할 수 있어야 한다.
+
+검증은 해당 Use Case의 Acceptance Criteria를 기준으로 수행하며, 실패하거나 검증하지 못한 경계는 별도로 기록한다.
+
+| 항목 | 값 |
+|---|---|
+| Status | Planned |
+| Scope | WS → AI Orchestrator ↔ Message Owner → Omni AI Server → Realtime → Client |
+| Environment | - |
+| Component Versions / Commits | - |
+| Last Verified At | - |
+| Evidence | - |
+| Known Gaps | - |
+
+### Integration Test Summary
+
+| ID | 통합 검증 시나리오 | 기대 결과 | Status |
+|---|---|---|---|
+| INT-001 | 사용자 복귀 Trigger 전달 | WS에서 생성한 `USER_RETURNED`가 AI Orchestrator에 전달되고 lifecycle이 생성된다. | Planned |
+| INT-002 | 메시지 선정 및 사용자 확인 | 실제 Message owner 조회 결과로 확인 요청이 올바른 Client에 전달된다. | Planned |
+| INT-003 | 사용자 `YES` 후 AI 실행 | 유효한 확인 응답에 대해 Omni AI Server 실행이 한 번만 시작된다. | Planned |
+| INT-004 | AI 결과 전달 | Topic Digest가 동일 `routingRef`의 현재 Client에 전달되고 lifecycle이 완료된다. | Planned |
+| INT-005 | 중복 Trigger | 같은 `absencePeriodId`의 재전송이 lifecycle 또는 AI 실행을 중복 생성하지 않는다. | Planned |
+| INT-006 | 사용자 `NO` 또는 만료 | lifecycle이 `DECLINED` 또는 `EXPIRED`로 종료되고 AI 실행은 시작되지 않는다. | Planned |
+
+### Execution Evidence
+
+| 항목 | 값 |
+|---|---|
+| Environment | - |
+| Component Versions / Commits | - |
+| Executed At | - |
+| Correlation IDs | `triggerId`, `absencePeriodId`, `executionId` |
+| Result | - |
+| Evidence Link | - |
+
 ## Current Implementation Gap
+
+WebSocket Service에는 Desktop `connectionType 1, 2` 적용 대상 판단, 명시적 상태 변경과 disconnect/reconnect 기반 부재 구간 관리, Redis current connection 검증과 `USER_RETURNED` REST 제출이 구현되어 있다. 자동화 검증과 durable Trigger Queue는 아직 완료되지 않았다.
 
 AI Orchestrator에는 `USER_RETURNED` REST endpoint, JDBC lifecycle 및 selection 저장소, 기능·사용자 정책과 permission 평가, WebSocket Service DB 조회 API를 연결한 Message Query adapter, confirmation 상태 전이, 실행 correlation과 recovery/maintenance 흐름이 구현되어 있다. 공통 Result Router의 Redis connection resolution과 `connectionType` 검증도 구현되어 있다.
 
-아직 연결되지 않은 범위는 Presence owner의 Desktop 적용 대상 판단과 복귀 Event 생성, 실제 confirmation delivery adapter, Omni AI Server 실행·reconciliation adapter, Returned Message result delivery adapter, Topic Extraction/우선순위 Workflow와 전체 Client E2E다. 해당 outbound port가 설정되지 않으면 현재 fallback 구현은 전송 실패 또는 `UNKNOWN` 실행 상태를 반환한다. NATS JetStream Trigger Consumer도 현재 구현 범위가 아니다.
+아직 연결되지 않은 범위는 TCP Service(NS) Presence Trigger, 실제 confirmation delivery adapter, Omni AI Server 실행·reconciliation adapter, Returned Message result delivery adapter, Topic Extraction/우선순위 Workflow와 전체 Client E2E다. 해당 outbound port가 설정되지 않으면 현재 fallback 구현은 전송 실패 또는 `UNKNOWN` 실행 상태를 반환한다. NATS JetStream Trigger Consumer도 현재 구현 범위가 아니다.
 
 ## Open Questions
 
