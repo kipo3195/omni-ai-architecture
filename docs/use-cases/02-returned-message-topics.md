@@ -147,15 +147,14 @@ ExecutionCommand
 
 ```text
 AiTask
-  taskType: RETURNED_MESSAGE_TOPICS
-  triggerId
-  taskId
   executionId
   tenantId
-  userId
-  absencePeriodId
-  messageSelectionRef 또는 contextRef
-  routingRef
+  taskType: RETURNED_MESSAGE_TOPICS
+  contractVersion: 1
+  input
+    userId
+    absencePeriodId
+    messageSelectionRef 또는 contextRef
 
 TopicDigestResult
   executionId

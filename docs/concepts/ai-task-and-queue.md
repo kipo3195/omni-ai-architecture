@@ -11,38 +11,34 @@ AiTask는 AI 실행이 확정된 작업을 표현하는 공통 실행 단위이�
 
 Business Event나 Client Request가 "무슨 일이 들어왔는가"를 나타낸다면, AiTask는 "AI가 무엇을 실행해야 하는가"를 나타낸다.
 
-현재 공통 `AiTask` schema는 Draft이며, 식별자 분리는 ADR 004가 `Proposed` 상태다. 계약 확정 상태는 [Common Contracts](../contracts/README.md)를 기준으로 확인한다.
+현재 공통 `AiTask` schema는 ADR 007, 식별자 분리는 ADR 004가 각각 `Proposed` 상태다. 계약 확정 상태는 [Common Contracts](../contracts/README.md)를 기준으로 확인한다.
 
 
 ---
 
-## 2. Candidate Fields
+## 2. Common AI Task Contract
 
-초기 필드 후보:
+AI Orchestrator는 Omni AI Server에 다음 최소 공통 계약으로 실행을 전달한다.
 
-```text
-taskId
-taskType
-triggerId
-triggerType
-executionId
-conversationId (필요 시)
-connectionId (필요 시)
-roomSessionId (필요 시)
-tenantId
-userId
-roomId
-requestedAt
-priority
-workloadType
-routingRef
-contextRef
-metadata
+```json
+{
+  "executionId": "execution-1",
+  "tenantId": "tenant-1",
+  "taskType": "RETURNED_MESSAGE_TOPICS",
+  "contractVersion": 1,
+  "input": {}
+}
 ```
 
-필수 필드는 구현 과정에서 축소하거나 확장할 수 있다.
+- `executionId`: AI Orchestrator가 생성한 개별 AI 실행 ID
+- `tenantId`: Tenant 간 권한, 실행과 데이터 격리 기준
+- `taskType`: Omni AI Server가 실행할 Workflow 선택
+- `contractVersion`: 같은 Task의 `input` 계약 버전
+- `input`: Task별 schema를 따르는 실제 실행 입력
 
-`connectionId`와 `routingRef`는 AI 실행의 의미를 나타내는 필드가 아니라 결과 전달 대상을 해석하기 위한 correlation / routing context이다. `roomSessionId`는 Conversation Start에 필요한 선택적 scope reference다. 최종 전달 대상은 Result push 시점의 Session Registry에서 다시 확인한다.
+`taskType + contractVersion` 조합이 `input` schema를 결정한다. 공통 계약의 상세 결정은 [Common AI Task Contract](../decisions/007-ai-task-contract.md)를 따른다. Retry, 멱등성, 동일 요청 비교와 `input` 크기 제한은 Task 요구사항이 구체화된 후 별도로 결정한다.
+
+`triggerId`, `taskId`, `routingRef`, `contextRef`, `roomSessionId` 같은 값은 AI Orchestrator의 실행 상태와 result delivery를 위해 별도로 관리할 수 있다. Omni AI Server 실행에 필요한 값만 Task별 `input`에 명시하며 공통 dispatch 필드로 확장하지 않는다. 최종 전달 대상은 Result push 시점의 Session Registry에서 다시 확인한다.
 
 
 ---
@@ -301,11 +297,11 @@ AI Orchestrator
   - Execution Correlation
   ↓
 AiTask 생성
-  - triggerId
-  - taskId
   - executionId
-  - connectionId 또는 roomSessionId
-  - routingRef
+  - tenantId
+  - taskType
+  - contractVersion
+  - input
   ↓
 Omni AI Server
 ```
@@ -326,7 +322,7 @@ AI Orchestrator
 AiTask / executionId
 ```
 
-AI Task는 `triggerId` / `taskId` / `executionId`로 처리하고, Client delivery는 `routingRef`의 target reference와 선택적인 Use Case scope reference를 통해 현재 owner를 다시 resolve한다.
+AI Task dispatch는 `executionId`로 실행을 연결한다. `triggerId`, `taskId`, `routingRef`와 선택적인 Use Case scope reference는 AI Orchestrator의 실행 상태에 보관하며, Client delivery 시 현재 owner를 다시 resolve하는 데 사용한다.
 
 
 ---

@@ -94,3 +94,4 @@ Status: Proposed | Accepted | Superseded
 - [004. AI Execution and Context Identifier Separation](004-ai-execution-and-context-identifiers.md)
 - [005. WebSocket Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)
 - [006. AI Feature Enablement Policy and User Preference Strategy](006-ai-feature-enablement-policy-and-user-preference.md)
+- [007. Common AI Task Contract](007-ai-task-contract.md)

@@ -17,7 +17,7 @@ Task 라우팅, Context Resolution, Workflow / Agent 실행, 결과 생성과 �
 - Runtime history와 checkpoint
 - Structured Result와 Stream Event 생성
 - timeout, cancellation, failure 처리
-- 실행 식별자 correlation과 logging. `triggerId / taskId / executionId` 분리는 Proposed ADR 004의 목표 모델이며 최종 schema는 아직 확정되지 않음
+- 실행 식별자 correlation과 logging. 공통 AiTask 계약은 Proposed ADR 007, `triggerId / taskId / executionId` 분리는 Proposed ADR 004를 따름
 
 ## Base Flow
 
@@ -41,5 +41,6 @@ AiTask
 
 ## Related
 
+- [Common AI Task Contract](../../decisions/007-ai-task-contract.md)
 - [Workflows](../../use-cases/README.md)
 - [Conversation Start Use Case](../../use-cases/01-conversation-start.md)

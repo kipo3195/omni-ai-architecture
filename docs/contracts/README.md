@@ -27,13 +27,67 @@
 | `DeliveryEvent` | Accepted | [ADR 001](../decisions/001-session-registry-result-routing.md) |
 | WebSocket `CLIENT_SESSION_CURRENT` | Accepted | [ADR 005](../decisions/005-websocket-realtime-client-session-result-routing.md) |
 | 전체 AI identifier 분리 | Proposed | [ADR 004](../decisions/004-ai-execution-and-context-identifiers.md) |
-| 공통 `AiTask` schema | Draft | [AiTask and Queue](../concepts/ai-task-and-queue.md) |
+| 공통 `AiTask` schema | Proposed | [ADR 007](../decisions/007-ai-task-contract.md) |
 
 `Proposed`와 `Draft` 계약은 구현 후보이며, Accepted 계약과 충돌하면 Accepted 계약을 우선한다.
 
 - `Accepted`: 공식 설계 결정으로 확정된 계약
 - `Proposed`: 최종 승인 전 검토 중인 설계안
 - `Draft`: 구현 과정에서 변경될 수 있는 초기 초안
+
+---
+
+## AI Task
+
+AI Orchestrator가 Omni AI Server에 실행을 전달하는 최소 공통 wire contract는 다음과 같다.
+
+```json
+{
+  "executionId": "execution-1",
+  "tenantId": "tenant-1",
+  "taskType": "RETURNED_MESSAGE_TOPICS",
+  "contractVersion": 1,
+  "input": {}
+}
+```
+
+`taskType + contractVersion` 조합이 Task별 `input`과 `result` schema를 결정한다. 기존 소비자가 처리할 수 없는 입출력 변경에서는 `contractVersion`을 증가시킨다. 구체적인 필드와 검증 규칙은 Task별 계약에서 관리한다.
+
+공통 wire field는 Architecture 문서의 식별자 명명 규칙에 따라 `lowerCamelCase`를 사용한다. 현재 API나 구현이 다른 이름을 사용하면 Component 문서와 Service adapter에 mapping을 기록한다.
+
+`executionId`는 AI Orchestrator가 생성하고 하나의 AI 실행과 그 결과를 연결한다. 공통 필드의 의미와 확장 범위는 [ADR 007](../decisions/007-ai-task-contract.md)을 따른다. Retry, 멱등성, 동일 요청 비교와 `input` 크기 제한은 아직 공통 계약으로 확정하지 않았다.
+
+---
+
+## AI Task Result
+
+성공한 Task는 Task별 결과를 `result`에 담는다.
+
+```json
+{
+  "executionId": "execution-1",
+  "taskType": "RETURNED_MESSAGE_TOPICS",
+  "contractVersion": 1,
+  "result": {}
+}
+```
+
+실패한 Task는 공통 오류를 `error`에 담는다.
+
+```json
+{
+  "executionId": "execution-1",
+  "taskType": "RETURNED_MESSAGE_TOPICS",
+  "contractVersion": 1,
+  "error": {
+    "code": "AI_GENERATION_FAILED",
+    "message": "Generation failed",
+    "retryable": true
+  }
+}
+```
+
+성공 응답은 `result`, 실패 응답은 `error`만 포함한다. `accepted`는 Task 실행 성공이 아닌 비동기 접수 응답이다. Task별 결과 schema와 오류 code는 각 Task 계약에서 정의한다.
 
 ---
 
