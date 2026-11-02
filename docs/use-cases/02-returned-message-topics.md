@@ -224,7 +224,35 @@ DETECTED
 
 ## AI Workflow
 
-복귀 시점에 선정된 쪽지를 발신자와 업무 주제 중심으로 그룹화하고 요약과 우선순위를 생성한다. LangGraph 적용 여부는 구현 선택이며, 공통 입력·출력 계약과 품질 조건을 우선한다.
+복귀 시점에 선정된 쪽지의 제목과 허용된 본문 Context를 한 번의 구조화 LLM 호출로 분석한다. 분석 결과는 발신자와 업무 주제 중심의 Topic, 요약, 우선순위, 답변 필요 여부, 후속 조치 필요 여부와 각 판정의 근거를 포함한다.
+
+### Execution Shape
+
+Omni AI Server는 Python FastAPI Application으로 이 Use Case의 실행 API를 제공한다. 내부 실행은 향후 확장 지점을 유지하기 위해 LangGraph로 구성하되, 현재 Graph에는 `analyze_message` 노드 하나만 둔다.
+
+```text
+START
+→ analyze_message
+  - 선정된 메시지의 subject와 허용된 본문 Context 정규화
+  - Structured Output을 사용하는 LLM 1회 호출
+  - Pydantic 결과 검증
+→ END
+```
+
+`analyze_message`는 선정된 메시지 묶음을 한 번에 분석한다. 현재 요구사항을 분류, Topic 추출과 요약 노드로 나누거나 동일 입력에 대해 LLM을 여러 번 호출하지 않는다. 구조화 출력은 최소한 `priority`, `replyRequired`, `actionRequired`, `topics`와 `grounds`를 표현하며, Topic별 `senderName`, `topic`, `summary`, `messageCount`, `sourceMessageRefs`와 기존 `priorityReason`의 추적 가능성을 유지한다.
+
+FastAPI 입력과 LangGraph State/출력에는 Pydantic Model을 사용한다. LLM 응답은 Pydantic Schema로 파싱·검증한 결과만 반환하며, 필수 필드 누락, enum 불일치 또는 source reference 불일치는 정상 결과로 전달하지 않는다. 검증 실패는 AI 실행 실패로 반환하고 재시도 여부와 최종 상태는 AI Orchestrator 정책에 따른다.
+
+### Boundary
+
+- Spring AI Orchestrator는 사용자 확인 이후 실행 입력을 구성하고 Omni AI Server를 호출한다.
+- Spring AI Orchestrator는 `executionId` 기반 중복 방지, timeout·retry, 실행 상태와 이력, Result Routing과 Client 전달을 포함한 execution lifecycle을 책임진다.
+- Omni AI Server는 전달받은 Context의 AI 분석과 구조화 결과 검증만 책임진다. 메시지 선정, 사용자 확인, 쪽지 DB 조회, Client connection 선택과 결과 전달은 수행하지 않는다.
+- Omni AI Server의 응답은 Client에 직접 전달하는 메시지가 아니라 AI Orchestrator가 lifecycle과 delivery에 사용하는 분석 결과다.
+
+### Extension Rule
+
+LangGraph 구조는 유지하지만 현재 필요하지 않은 placeholder node, 분기, subgraph 또는 별도 agent는 만들지 않는다. 추후 전처리, Tool 사용, 검증·review 또는 조건부 재처리가 실제 요구사항이 되면 기존 입력·출력 계약과 `analyze_message`의 책임을 기준으로 노드를 추가한다.
 
 ### Context Scope
 
@@ -236,8 +264,8 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ### Quality Focus
 
-- 원문에 없는 업무나 긴급도를 만들지 않는다.
-- `priority`에는 원문 근거를 반영하고 `priorityReason`과 `sourceMessageRefs`로 추적 가능하게 한다.
+- 원문에 없는 업무, 긴급도, 답변 필요성 또는 후속 조치를 만들지 않는다.
+- `priority`, `replyRequired`, `actionRequired`에는 원문 근거를 반영하고 `grounds`, 기존 `priorityReason`과 `sourceMessageRefs`로 추적 가능하게 한다.
 - 근거가 부족하면 기본 우선순위 또는 `UNKNOWN`을 사용한다.
 - 짧고 구분 가능한 Topic 제목을 생성한다.
 - 원본 메시지와의 추적 가능성을 유지한다.
