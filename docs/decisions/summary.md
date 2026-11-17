@@ -13,6 +13,7 @@
 | [005](005-websocket-realtime-client-session-result-routing.md) | WebSocket MVP는 인증 세션을 current connection의 논리적 target으로 사용한다. | Accepted |
 | [006](006-ai-feature-enablement-policy-and-user-preference.md) | Global, Feature와 User AI Policy의 source와 조회 전략을 분리한다. | Accepted |
 | [007](007-ai-task-contract.md) | AI Orchestrator는 Task별 입력을 확장할 수 있는 최소 공통 AiTask 계약을 사용한다. | Proposed |
+| [008](008-durable-asynchronous-ai-execution-and-result-reconciliation.md) | 장시간 AI 실행은 durable async start, callback outbox와 status reconciliation을 결합해 처리한다. | Proposed |
 
 ADR 상태는 `Proposed → Accepted → Superseded`만 사용한다.
 

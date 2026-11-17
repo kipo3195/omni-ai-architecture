@@ -42,7 +42,14 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
    ├─ NO 또는 timeout: DECLINED / EXPIRED
    └─ YES: stable executionId 생성 후 RETURNED_MESSAGE_TOPICS 실행 dispatch
 → 저장된 messageSelectionRef와 source item key로 AI 실행 입력 구성
-→ Omni AI Server: Topic Extraction + Priority
+→ Omni AI Server
+  - execution과 immutable request를 durable하게 저장
+  - 실행 Queue 등록 후 202 Accepted
+  - Worker가 Topic Extraction + Priority 실행
+  - terminal result와 callback outbox event를 함께 저장
+→ Callback Worker가 AI Orchestrator에 terminal result 전달
+   └─ callback 지연 또는 유실: AI Orchestrator가 execution status query로 reconciliation
+→ AI Orchestrator가 callback 또는 조회 결과를 같은 executionId로 멱등 반영
 → AI Orchestrator Result Router
 → routingRef와 동일한 connectionType의 현재 connection owner resolve
 → Messenger Client Ingress의 현재 connection owner
@@ -60,8 +67,8 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
 | --- | --- |
 | Presence owner inside Messenger Client Ingress | 인증된 Desktop `connectType 1, 2` 적용 대상 판단, `AWAY/OFFLINE → ONLINE` 전이 감지, 자리비움 구간과 `USER_RETURNED` 확정, trusted connection context 제공 |
 | 현재 Message owner | 내부 DB 조회 Queue를 통한 unread count, 후보 메시지 선정과 AI Context 제공 |
-| AI Orchestrator | source event contract 검증, 기능별 실행 정책 평가, 사용자 확인 lifecycle, Context Assembly, 중복 방지, AiTask와 실행 이력 관리. Presence 상태 전이는 재판정하지 않음 |
-| Omni AI Server | 선정된 메시지의 발신자·업무 주제·우선순위 추출 |
+| AI Orchestrator | source event contract 검증, 기능별 실행 정책 평가, 사용자 확인 lifecycle, Context Assembly, 중복 방지, AiTask와 실행 correlation 관리, callback 멱등 처리와 status reconciliation. Presence 상태 전이는 재판정하지 않음 |
+| Omni AI Server | executionId 기반 실행 접수와 멱등성, durable execution Queue와 Worker, 선정된 메시지의 업무 주제·우선순위 추출, terminal result 저장, callback outbox와 status query |
 | Result Router | trusted `routingRef` 검증, 동일 connectionType의 현재 connection owner 선택 |
 | Messenger Client Ingress | 확인 팝업과 Topic Digest를 선택된 WebSocket 또는 TCP local connection에 전달 |
 | Client | 사용자 동의 입력, 로컬에서 삭제된 원본을 제외한 최종 결과 노출 |
@@ -126,9 +133,9 @@ routingRef
 
 확인 응답은 인증된 현재 connection에서 받아야 하며 `requestId + absencePeriodId`로 중복 응답을 차단한다. `NO`는 정상 종료이고, 제한 시간 내 응답이 없으면 `EXPIRED`로 종료한다.
 
-### Current Execution Command and Planned AiTask
+### Returned Message AI Task
 
-현재 구현은 공통 `AiTask`를 생성하지 않고 stable `executionId`를 저장한 뒤 다음 실행 command를 `AiExecutionGateway`로 전달한다.
+AI Orchestrator는 stable `executionId`를 저장한 뒤 다음 command를 `AiExecutionGateway`로 전달한다. Adapter는 이를 Omni AI Server의 snake_case wire contract로 변환한다.
 
 ```text
 ExecutionCommand
@@ -143,31 +150,48 @@ ExecutionCommand
   routingRef
 ```
 
-공통 실행 계약이 연결된 이후의 목표 `AiTask`는 다음과 같다.
+Returned Message Topics의 공통 `AiTask`는 contract version 2를 사용한다.
 
 ```text
 AiTask
   executionId
   tenantId
   taskType: RETURNED_MESSAGE_TOPICS
-  contractVersion: 1
+  contractVersion: 2
   input
+    requestId
     userId
     absencePeriodId
-    messageSelectionRef 또는 contextRef
+    messageSelectionRef
+    selectedItems[]
+      sourceItemKey
+      subject
+      sequence
 
 TopicDigestResult
   executionId
   topics[]
-    senderName
     topic
     summary
+    sourceMessageRefs[]
+  messageAssessments[]
+    messageRef
     priority
     priorityReason
-    messageCount
-    sourceMessageRefs[]
+    replyRequired
+    replyReason
+    actionRequired
+    actionReason
   generatedAt
 ```
+
+실행 API는 durable asynchronous start를 사용한다. Start의 `202 Accepted`는 결과 성공이 아니라 execution이 내구성 있게 접수됐다는 의미다. Omni AI Server는 `tenantId + executionId`로 중복 start를 같은 논리 실행에 수렴시키고 다음 상태를 조회할 수 있어야 한다.
+
+```text
+ACCEPTED → RUNNING → SUCCEEDED | FAILED | CANCELLED
+```
+
+Terminal 결과는 callback으로 우선 전달하고, AI Orchestrator는 callback이 지연되거나 유실된 PROCESSING 실행을 status query로 복구한다. Callback과 조회 결과는 동일한 result handling 경로를 사용한다. 상세 HTTP와 result v2 schema는 `omni-ai-platform/docs/returned_message_topics` 계약을 따른다.
 
 ## Message Selection and Read/Delete Semantics
 
@@ -219,6 +243,9 @@ DETECTED
 - 복귀 구간은 `tenantId + userId + absencePeriodId`를 idempotency key로 사용한다.
 - 사용자 확인은 `requestId + absencePeriodId`로 한 번만 상태를 전이한다.
 - AI 실행은 `executionId`, 결과는 `eventId`로 중복 처리한다.
+- Omni AI start는 `tenantId + executionId`와 immutable request fingerprint로 멱등 처리하며 transport retry가 새 LLM 실행을 만들지 않는다.
+- Callback은 at-least-once로 중복 도착할 수 있고, callback과 polling 결과는 `PROCESSING + executionId` conditional update로 한 번만 반영한다.
+- Timeout은 실행 실패가 아니며, 한 번의 status query 404를 근거로 generate를 다시 호출하지 않는다.
 - 이벤트 이력 저장은 공통 비동기 처리 경로를 사용할 수 있지만 graceful shutdown만으로 내구성을 보장하지 않는다. 이력이 복구 대상이면 Outbox, durable Queue 또는 durable execution repository를 사용한다.
 - AI 생성 성공과 Client 전달 성공을 별도 상태로 기록한다.
 
@@ -285,6 +312,11 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 - 메시지 조회 실패, 사용자 확인 전달 실패, AI 생성 실패와 결과 전달 실패를 구분한다.
 - USER_RETURNED REST 호출의 timeout과 retry에도 동일한 `triggerId`를 사용해 중복 실행을 방지한다.
 - DB 조회 Queue의 retry와 timeout은 현재 Message owner가 책임지고, Orchestrator는 Port 호출 결과를 execution 상태로 반영한다.
+- Omni AI start의 validation 또는 immutable request conflict는 실행 불가로 종료하지만 timeout, connection failure와 retryable 5xx는 `PROCESSING`을 유지한다.
+- Omni AI callback은 terminal result와 outbox event를 먼저 저장한 뒤 전송한다. Callback timeout과 5xx는 같은 eventId로 재전송하며 Orchestrator의 2xx는 결과가 durable하게 반영됐다는 acknowledgement다.
+- Callback이 정해진 시간 안에 도착하지 않으면 AI Orchestrator가 같은 executionId로 status를 조회한다. `ACCEPTED`와 `RUNNING`은 backoff 후 다시 조회하고 terminal 상태는 callback과 같은 경로로 반영한다.
+- Status query 404는 visibility grace 동안 재조회한다. 한 번의 404를 실행 부재로 단정하거나 멱등성이 보장되지 않은 generate 재호출로 연결하지 않는다.
+- Reconciliation deadline 초과는 실행이 없었다는 뜻이 아니므로 운영상 unresolved 상태와 수동 조치 정책을 사용한다.
 - 만료된 Trigger, 확인 요청 또는 `messageSelectionRef`는 재실행하지 않는다.
 - AI 실행 중 Client가 reconnect하면 trusted `routingRef`의 target과 `connectionType`으로 현재 owner를 다시 resolve한다.
 - 유효한 target이 없으면 요청 당시 instance로 fallback하지 않고 제한된 retry 후 `DELIVERY_FAILED`로 기록한다.
@@ -317,6 +349,11 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 - 사용자가 `YES`를 선택하기 전에는 LLM을 호출하지 않는다.
 - AI 실행 시작 후에는 후보 메시지의 현재 읽음 여부와 관계없이 최초 selection을 처리한다.
 - 동일 복귀 구간과 동일 확인 응답이 중복 처리되지 않는다.
+- 동일 executionId의 start retry가 LLM 실행을 중복 생성하지 않는다.
+- Callback이 중복 도착하거나 callback과 polling이 경쟁해도 terminal 결과를 한 번만 반영한다.
+- Callback 유실 시 status query로 terminal 결과를 복구한다.
+- Status query의 단일 404가 generate 재호출로 이어지지 않는다.
+- Client result delivery 실패가 LLM 재실행으로 이어지지 않는다.
 - Orchestrator는 쪽지 DB를 직접 조회하지 않는다.
 - 팝업과 결과는 trusted `routingRef`와 같은 `connectionType`의 현재 connection으로 전달된다.
 - Client는 로컬에서 삭제된 원본만 결과 노출에서 제외한다.
@@ -398,9 +435,9 @@ Returned Message Topics의 System Integration Verification은 개별 Component�
 
 WebSocket Service에는 Desktop `connectionType 1, 2` 적용 대상 판단, 명시적 상태 변경과 disconnect/reconnect 기반 부재 구간 관리, Redis current connection 검증과 `USER_RETURNED` REST 제출이 구현되어 있다. 자동화 검증과 durable Trigger Queue는 아직 완료되지 않았다.
 
-AI Orchestrator에는 `USER_RETURNED` REST endpoint, JDBC lifecycle 및 selection 저장소, 기능·사용자 정책과 permission 평가, WebSocket Service DB 조회 API를 연결한 Message Query adapter, confirmation 상태 전이, 실행 correlation과 recovery/maintenance 흐름이 구현되어 있다. 공통 Result Router의 Redis connection resolution과 `connectionType` 검증도 구현되어 있다.
+AI Orchestrator에는 `USER_RETURNED` REST endpoint, JDBC lifecycle 및 selection 저장소, 기능·사용자 정책과 permission 평가, WebSocket Service DB 조회 API를 연결한 Message Query adapter, confirmation 상태 전이, 실행 correlation과 recovery/maintenance 흐름이 구현되어 있다. 현재 Omni AI 호출은 동기 HTTP 응답을 기다리고, PROCESSING 복구에서 status 404를 start 재호출로 연결하므로 Decision 008의 async start와 reconciliation 규칙으로 변경해야 한다. 공통 Result Router의 Redis connection resolution과 `connectionType` 검증도 구현되어 있다.
 
-아직 연결되지 않은 범위는 TCP Service(NS) Presence Trigger, 실제 confirmation delivery adapter, Omni AI Server 실행·reconciliation adapter, Returned Message result delivery adapter, Topic Extraction/우선순위 Workflow와 전체 Client E2E다. 해당 outbound port가 설정되지 않으면 현재 fallback 구현은 전송 실패 또는 `UNKNOWN` 실행 상태를 반환한다. NATS JetStream Trigger Consumer도 현재 구현 범위가 아니다.
+Omni AI Server에는 동기형 Returned Message Topics v2 Workflow가 구현되어 있지만 durable execution Queue, `202 Accepted`, execution status query, callback과 callback outbox는 아직 구현되어 있지 않다. AI Orchestrator의 실제 Returned Message result delivery adapter도 연결되지 않았다. 추가 미완료 범위는 TCP Service(NS) Presence Trigger, 전체 Client E2E와 NATS JetStream Trigger Consumer다.
 
 ## Open Questions
 
@@ -416,4 +453,5 @@ AI Orchestrator에는 `USER_RETURNED` REST endpoint, JDBC lifecycle 및 selectio
 - [Server Trigger](../components/ai-orchestrator/server-trigger.md)
 - [Server-driven AI](../concepts/server-driven-ai.md)
 - [Session Registry Based AI Result Routing](../decisions/001-session-registry-result-routing.md)
+- [Durable Asynchronous AI Execution and Result Reconciliation](../decisions/008-durable-asynchronous-ai-execution-and-result-reconciliation.md)
 - [Messenger Client Ingress Result Delivery](../components/messenger-client-ingress/result-delivery.md)

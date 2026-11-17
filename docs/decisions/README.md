@@ -95,3 +95,4 @@ Status: Proposed | Accepted | Superseded
 - [005. WebSocket Service Result Routing by Authenticated Client Session](005-websocket-realtime-client-session-result-routing.md)
 - [006. AI Feature Enablement Policy and User Preference Strategy](006-ai-feature-enablement-policy-and-user-preference.md)
 - [007. Common AI Task Contract](007-ai-task-contract.md)
+- [008. Durable Asynchronous AI Execution and Result Reconciliation](008-durable-asynchronous-ai-execution-and-result-reconciliation.md)
