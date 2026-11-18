@@ -44,7 +44,8 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
 → 저장된 messageSelectionRef와 source item key로 AI 실행 입력 구성
 → Omni AI Server
   - execution과 immutable request를 durable하게 저장
-  - 실행 Queue 등록 후 202 Accepted
+  - process-local 실행 Queue 등록 후 202 Accepted
+  - Queue 등록 유실은 durable execution repository의 ACCEPTED recovery로 복구
   - Worker가 Topic Extraction + Priority 실행
   - terminal result와 callback outbox event를 함께 저장
 → Callback Worker가 AI Orchestrator에 terminal result 전달
@@ -68,7 +69,7 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
 | Presence owner inside Messenger Client Ingress | 인증된 Desktop `connectType 1, 2` 적용 대상 판단, `AWAY/OFFLINE → ONLINE` 전이 감지, 자리비움 구간과 `USER_RETURNED` 확정, trusted connection context 제공 |
 | 현재 Message owner | 내부 DB 조회 Queue를 통한 unread count, 후보 메시지 선정과 AI Context 제공 |
 | AI Orchestrator | source event contract 검증, 기능별 실행 정책 평가, 사용자 확인 lifecycle, Context Assembly, 중복 방지, AiTask와 실행 correlation 관리, callback 멱등 처리와 status reconciliation. Presence 상태 전이는 재판정하지 않음 |
-| Omni AI Server | executionId 기반 실행 접수와 멱등성, durable execution Queue와 Worker, 선정된 메시지의 업무 주제·우선순위 추출, terminal result 저장, callback outbox와 status query |
+| Omni AI Server | executionId 기반 durable 실행 접수와 멱등성, process-local Queue와 ACCEPTED recovery worker, lease 만료 RUNNING 격리, 선정된 메시지의 업무 주제·우선순위 추출, terminal result 저장, callback outbox와 status query |
 | Result Router | trusted `routingRef` 검증, 동일 connectionType의 현재 connection owner 선택 |
 | Messenger Client Ingress | 확인 팝업과 Topic Digest를 선택된 WebSocket 또는 TCP local connection에 전달 |
 | Client | 사용자 동의 입력, 로컬에서 삭제된 원본을 제외한 최종 결과 노출 |
@@ -435,9 +436,9 @@ Returned Message Topics의 System Integration Verification은 개별 Component�
 
 WebSocket Service에는 Desktop `connectionType 1, 2` 적용 대상 판단, 명시적 상태 변경과 disconnect/reconnect 기반 부재 구간 관리, Redis current connection 검증과 `USER_RETURNED` REST 제출이 구현되어 있다. 자동화 검증과 durable Trigger Queue는 아직 완료되지 않았다.
 
-AI Orchestrator에는 `USER_RETURNED` REST endpoint, JDBC lifecycle 및 selection 저장소, 기능·사용자 정책과 permission 평가, WebSocket Service DB 조회 API를 연결한 Message Query adapter, confirmation 상태 전이, 실행 correlation과 recovery/maintenance 흐름이 구현되어 있다. 현재 Omni AI 호출은 동기 HTTP 응답을 기다리고, PROCESSING 복구에서 status 404를 start 재호출로 연결하므로 Decision 008의 async start와 reconciliation 규칙으로 변경해야 한다. 공통 Result Router의 Redis connection resolution과 `connectionType` 검증도 구현되어 있다.
+AI Orchestrator에는 `USER_RETURNED` REST endpoint, JDBC lifecycle 및 selection 저장소, 기능·사용자 정책과 permission 평가, WebSocket Service DB 조회 API를 연결한 Message Query adapter, confirmation 상태 전이, 실행 correlation과 recovery/maintenance 흐름이 구현되어 있다. 현재 Omni AI 연동은 여전히 동기 HTTP 응답을 기다리고, PROCESSING 복구에서 status 404를 start 재호출로 연결하므로 Omni AI Server에 구현된 async start, callback과 status reconciliation 계약으로 전환해야 한다. 공통 Result Router의 Redis connection resolution과 `connectionType` 검증도 구현되어 있다.
 
-Omni AI Server에는 동기형 Returned Message Topics v2 Workflow가 구현되어 있지만 durable execution Queue, `202 Accepted`, execution status query, callback과 callback outbox는 아직 구현되어 있지 않다. AI Orchestrator의 실제 Returned Message result delivery adapter도 연결되지 않았다. 추가 미완료 범위는 TCP Service(NS) Presence Trigger, 전체 Client E2E와 NATS JetStream Trigger Consumer다.
+Omni AI Server에는 MariaDB execution repository, `202 Accepted`, process-local Queue와 ACCEPTED recovery worker, execution status query, callback outbox와 retry를 사용하는 비동기 baseline이 구현되어 있다. Lease가 만료된 RUNNING execution은 자동 재실행하지 않고 내부 `LEASE_EXPIRED` recovery 상태로 격리한다. 운영 배포 전 보완 범위는 service-to-service 인증, lease heartbeat 또는 broker 기반 Queue, retention/cleanup과 dead-letter 운영 도구다. AI Orchestrator의 비동기 start/callback/status 연동과 실제 Returned Message result delivery adapter는 아직 연결되지 않았다. 추가 미완료 범위는 TCP Service(NS) Presence Trigger, 전체 Client E2E와 NATS JetStream Trigger Consumer다.
 
 ## Open Questions
 
