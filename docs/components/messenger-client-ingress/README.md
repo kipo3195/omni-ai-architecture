@@ -9,6 +9,7 @@ Status: In Progress
 | Area | 기록 범위 |
 | --- | --- |
 | [Result Delivery](result-delivery.md) | Connection Registry, reconnect fencing, REST target resolution, local Client delivery |
+| [Pending AI Actions](pending-actions.md) | WebSocket action 전달, `sid` 기반 재접속 복구, Returned Message confirmation projection |
 | [User AI Settings](user-ai-settings.md) | 사용자 AI 설정 API, DB 저장, Redis cache 갱신 |
 
 ---
@@ -27,6 +28,7 @@ Status: In Progress
 - Browser JWT `sid`와 현재 connection correlation
 - REST / WebSocket 요청의 delivery target resolution
 - AI Result의 local connection lookup과 최종 전송
+- Client 후속 입력이 필요한 AI action의 실시간 전달과 인증 세션별 재접속 복구
 - 사용자 AI 설정 조회·변경과 영속화
 
 ---
