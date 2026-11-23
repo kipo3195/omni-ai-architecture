@@ -74,7 +74,7 @@ routingRef
 
 Result Router는 Client나 Omni AI Server가 반환한 routing 위치를 신뢰하지 않는다. `executionId`로 Orchestrator가 저장한 `routingRef`를 조회한다.
 
-`connectionType`은 특정 Client 종류로 delivery를 제한해야 하는 Use Case의 선택적 constraint다. `channelType`이 WebSocket/TCP transport를 의미하는 것과 달리, `connectionType`은 Messenger Client Ingress가 인증된 connection context에서 판정한 제품별 연결 구분이다. Returned Message Topics에서는 Desktop Client의 legacy `connectType 1, 2` 중 요청을 발생시킨 값을 trusted `routingRef`에 저장한다.
+`connectionType`은 특정 Client 종류로 delivery를 제한해야 하는 Use Case의 선택적 constraint다. `channelType`이 WebSocket/TCP transport를 의미하는 것과 달리, `connectionType`은 Messenger Client Ingress가 인증된 connection context에서 판정한 제품별 연결 구분이다. Returned Message Topics에서는 Client의 legacy `connectType 1, 2, 3` 중 요청을 발생시킨 값을 trusted `routingRef`에 저장한다.
 
 `scopeRef`가 있으면 `scopeRef.type`에 대응하는 validator로 Event가 아직 유효한지 확인한다. 예를 들어 Conversation Start는 `ROOM_SESSION`, Draft Assist는 `DRAFT_SESSION` validator를 사용할 수 있다. 별도 lifecycle이 없는 Event는 scope 검증을 생략한다.
 

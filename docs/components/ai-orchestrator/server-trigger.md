@@ -56,11 +56,11 @@ Messenger Client Ingress가 방 입장 비즈니스 이벤트 처리
 
 ## 다음 적용 사례: Returned Message Topics
 
-Messenger Client Ingress 내 Presence owner가 인증된 Desktop Client의 `connectType 1, 2`를 확인하고 `AWAY/OFFLINE → ONLINE` 전이와 자리비움 구간을 확정한다. AI Orchestrator는 확정된 `USER_RETURNED`를 재판정하지 않고 Returned Message Topics의 기능별 정책과 수신 쪽지를 확인한다. unread 메시지가 있으면 사용자에게 먼저 실행 여부를 확인하고, 유효한 `YES` 응답을 받은 경우에만 stable `executionId`로 AI 실행을 dispatch한다. 공통 AiTask 연결은 목표 구조다.
+Messenger Client Ingress 내 Presence owner가 인증된 Client의 `connectType 1, 2, 3`을 확인하고 `AWAY/OFFLINE → ONLINE` 전이와 자리비움 구간을 확정한다. AI Orchestrator는 확정된 `USER_RETURNED`를 재판정하지 않고 Returned Message Topics의 기능별 정책과 수신 쪽지를 확인한다. unread 메시지가 있으면 사용자에게 먼저 실행 여부를 확인하고, 유효한 `YES` 응답을 받은 경우에만 stable `executionId`로 AI 실행을 dispatch한다. 공통 AiTask 연결은 목표 구조다.
 
 ```text
 WebSocket Service (WS) or TCP Service (NS)
-  → 인증된 Desktop / connectType 1, 2 확인
+  → 인증된 connection / connectType 1, 2, 3 확인
   → AWAY/OFFLINE → ONLINE 전이 감지
   → offlineSince / returnedAt / absencePeriodId 확정
   → USER_RETURNED 확정

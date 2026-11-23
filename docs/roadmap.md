@@ -55,7 +55,7 @@ Status: Planned
 Presence owner가 인증된 Desktop Client의 `connectType 1, 2`에서 사용자의 자리비움 후 온라인 복귀를 확정하면, AI Orchestrator가 기능별 정책을 적용하고 자리비움 동안의 unread 쪽지를 조회한다. 대상이 있으면 사용자에게 실행 여부를 확인하고, 동의한 경우 Omni AI Server가 발신자·업무 주제·우선순위 중심의 Topic Digest를 생성해 요청 connection으로 전달한다.
 
 ```text
-Desktop connectType 1 또는 2: AWAY/OFFLINE → ONLINE
+지원 connectType 1, 2 또는 3: AWAY/OFFLINE → ONLINE
 → Presence owner: connection 자격, 상태 전이, 자리비움 구간, USER_RETURNED 확정
 → AI Orchestrator: source event 검증과 AI 기능 정책
 → 현재 Message owner의 DB 조회 Queue를 통한 unread 후보 선정
@@ -67,7 +67,7 @@ Desktop connectType 1 또는 2: AWAY/OFFLINE → ONLINE
 
 주요 범위:
 
-- Presence owner의 Desktop `connectType 1, 2` 적용 대상 판단, 상태 전이 감지와 자리비움 구간·`USER_RETURNED` 확정
+- Presence owner의 `connectType 1, 2, 3` 적용 대상 판단, 상태 전이 감지와 자리비움 구간·`USER_RETURNED` 확정
 - 최소·최대 부재 시간과 장기 부재/만료 정책
 - 현재 Message owner의 DB 조회 Queue를 사용한 unread 후보 선정
 - unread가 없거나 사용자가 동의하지 않을 때 실행하지 않는 정책
@@ -78,7 +78,7 @@ Desktop connectType 1 또는 2: AWAY/OFFLINE → ONLINE
 
 완료 기준:
 
-- Presence owner는 Desktop `connectType 1, 2` 이외의 연결에서 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
+- Presence owner는 `connectType 1, 2, 3` 이외의 연결에서 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
 - AI Orchestrator는 source-confirmed 복귀 사실을 Presence 원시 상태로 재판정하지 않는다.
 - 동일 복귀 이벤트와 사용자 확인 응답은 한 번만 처리된다.
 - unread 쪽지가 없거나 사용자가 동의하지 않은 경우 LLM을 호출하지 않는다.

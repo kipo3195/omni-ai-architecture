@@ -73,7 +73,7 @@ routingRef
     id
 ```
 
-`channelType`은 WebSocket/TCP 같은 transport 또는 `Messenger Client Ingress` 내부의 물리 서비스 종류를 나타내고, `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 connection 구분값이다. `connectionType`은 모든 Result의 공통 필수가 아니라 특정 Client 종류로 전달을 제한해야 하는 Use Case의 선택적 delivery constraint다. 예를 들어 Returned Message Topics는 Desktop Client의 legacy `connectType 1, 2`만 대상으로 하므로 trusted `routingRef.connectionType`을 필수로 저장한다.
+`channelType`은 WebSocket/TCP 같은 transport 또는 `Messenger Client Ingress` 내부의 물리 서비스 종류를 나타내고, `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 connection 구분값이다. `connectionType`은 모든 Result의 공통 필수가 아니라 특정 Client 종류로 전달을 제한해야 하는 Use Case의 선택적 delivery constraint다. 예를 들어 Returned Message Topics는 Client의 legacy `connectType 1, 2, 3`을 대상으로 하므로 trusted `routingRef.connectionType`을 필수로 저장한다.
 
 `connectionType`이 있는 경우 Result Router는 `targetRef`로 현재 connection을 resolve한 뒤 Registry record의 `connectionType`이 trusted `routingRef`와 일치하는지 검증한다. 값이 다르면 다른 타입의 connection이나 사용자 전체 connection으로 fallback 또는 broadcast하지 않는다. 이 값은 Client request body의 원시값을 신뢰하지 않고 `Messenger Client Ingress`가 인증된 connection context에서 구성한다.
 

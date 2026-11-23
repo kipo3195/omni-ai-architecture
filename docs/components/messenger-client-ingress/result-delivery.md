@@ -37,7 +37,7 @@ rt:connection:{tenantId}:{connectionId}
   }
 ```
 
-`channelType`은 WebSocket/TCP 같은 transport 구분이고, `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 연결 구분이다. 특정 Use Case가 `routingRef.connectionType`을 사용하면 Registry record에 같은 값을 저장해 Result Router와 local delivery가 검증할 수 있게 한다. Returned Message Topics에서는 Desktop Client의 legacy `connectType 1, 2`가 이 값으로 사용된다.
+`channelType`은 WebSocket/TCP 같은 transport 구분이고, `connectionType`은 Messenger가 인증된 connection context에서 판정한 제품별 연결 구분이다. 특정 Use Case가 `routingRef.connectionType`을 사용하면 Registry record에 같은 값을 저장해 Result Router와 local delivery가 검증할 수 있게 한다. Returned Message Topics에서는 Client의 legacy `connectType 1, 2, 3`이 이 값으로 사용된다.
 
 `connectionId`와 `leaseId`는 연결할 때마다 새로 생성한다. `connectionId`는 UUIDv7 또는 ULID처럼 충돌 가능성이 낮은 값을 사용하고, process-local object hash나 timestamp 단독 값은 사용하지 않는다.
 

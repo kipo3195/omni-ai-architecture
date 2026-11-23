@@ -58,7 +58,7 @@ Client 상태 변경
 
 상태 변경 응답은 AI Orchestrator 처리 완료를 기다리지 않는다. 다만 실제 HTTP response flush와 비동기 작업 실행 순서에 의존하지 않도록 Client는 상태 변경 응답과 WebSocket event를 독립적으로 처리한다.
 
-Returned Message Topics의 적용 대상과 허용되는 `connectionType`은 해당 Use Case 계약을 따른다. 이 문서는 대상 Client 범위를 확장하지 않고, Presence owner가 검증해 `routingRef`에 저장한 값을 delivery projection에서도 유지한다.
+Returned Message Topics는 인증된 connection의 `connectionType 1, 2, 3`을 허용한다. Presence owner가 검증해 `routingRef`에 저장한 값을 delivery projection에서도 유지한다.
 
 ### AI Orchestrator Response
 
@@ -123,7 +123,7 @@ ai:returned-confirmation:{confirmationId}
   "tenant_id": "ucware",
   "user_id": "demo04@ucware",
   "client_session_id": "82b75440-c1ea-4c4b-b245-ae8ccc17c290",
-  "connection_type": 1,
+  "connection_type": 3,
   "confirmation_expires_at": "2026-10-19T06:05:00Z",
   "status": "AWAITING_CONFIRMATION"
 }
@@ -221,10 +221,29 @@ Messenger Client Ingress는 Access Token을 검증한 뒤 `tenantId`, `userId`, 
 이 API는 Client가 다음 시점에 호출한다.
 
 - WebSocket reconnect 완료 직후
-- 페이지 reload 또는 Desktop Client process 재시작 후 인증 세션 복구 시
+- 페이지 reload 또는 Client process 재시작 후 인증 세션 복구 시
 - Client가 WebSocket sequence gap 또는 local state 불일치를 감지했을 때
 
 조회 성공은 action 처리 완료 acknowledgement가 아니다. 조회만으로 projection을 삭제하거나 `AWAITING_CONFIRMATION` 상태를 변경하지 않는다.
+
+## Client Confirmation Placeholder
+
+현재 Messenger Client Ingress는 향후 confirmation 후속 처리를 연결하기 위한 임시 API를 유지한다.
+
+```http
+POST /rest/return_message_confirmation
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+```json
+{
+  "confirmation": true,
+  "key": "confirmation-1"
+}
+```
+
+현재 구현은 인증된 `userId`, `confirmation`, `key`를 검증하고 로깅한 뒤 공통 성공 응답을 반환한다. DB를 변경하거나 AI Orchestrator confirmation API를 호출하지 않는다. 이 API를 실제 사용자 결정 처리로 전환할 때는 pending projection의 `userId`, `clientSessionId`, 만료 시각과 상태를 먼저 검증하고, AI Orchestrator 후속 호출 및 멱등 상태 전이를 함께 구현한다.
 
 ## Authentication Session Scope
 
@@ -258,7 +277,6 @@ Projection 저장과 absence 삭제 사이의 crash window까지 제거하려면
 
 ## Deferred
 
-- Messenger Client의 confirmation 제출 request/response 세부 wire contract
 - Messenger Client confirmation을 AI Orchestrator의 `POST /api/v1/returned-messages/{requestId}/confirmations`로 연결하는 adapter 구현
 - confirmation 완료 후 pending projection 상태 전이와 제거 시점의 세부 구현
 - user-scoped pending action 복구 또는 새 `sid`로의 action rebinding

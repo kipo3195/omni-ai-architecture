@@ -2,27 +2,27 @@
 
 ## User Outcome
 
-Desktop Client 사용자가 일정 시간 이상 자리비운 뒤 온라인으로 복귀하고, 해당 구간에 읽지 않은 수신 쪽지가 있으면 요약 실행 여부를 확인한다. 사용자가 동의하면 복귀 시점에 선정한 쪽지를 발신자·업무 주제·우선순위 중심의 짧은 목록으로 받는다.
+지원 Client 사용자가 일정 시간 이상 자리비운 뒤 온라인으로 복귀하고, 해당 구간에 읽지 않은 수신 쪽지가 있으면 요약 실행 여부를 확인한다. 사용자가 동의하면 복귀 시점에 선정한 쪽지를 발신자·업무 주제·우선순위 중심의 짧은 목록으로 받는다.
 
 ## Trigger
 
-- Presence owner는 인증된 connection context에서 `clientPlatform = DESKTOP`이고 현재 Messenger 계약의 `connectType`이 `1` 또는 `2`인지 확인한다. 다른 연결은 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
+- Presence owner는 인증된 connection context에서 현재 Messenger 계약의 `connectType`이 `1`, `2` 또는 `3`인지 확인한다. 다른 연결은 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
 - Presence owner는 대상 연결의 `AWAY/OFFLINE → ONLINE` 상태 전이를 감지하고 `offlineSince`, `returnedAt`, `absencePeriodId`를 확정한다. 이 조건이 성립한 경우에만 `USER_RETURNED`를 생성한다.
 - AI Orchestrator는 확정된 복귀 사실을 재판정하지 않고, Returned Message Topics의 기능별 정책을 적용한다. 자리비움 시간은 `minAwayDuration` 이상이어야 하며 초기 정책값 후보는 15분이다.
 - `maxAbsenceDuration`, `maxLookback`, Trigger expiration을 넘긴 장기 부재는 AI Orchestrator가 실행하지 않거나 제한된 조회 구간만 사용한다.
 - 복귀 구간에 읽지 않은 수신 쪽지가 없으면 사용자 확인과 AI 실행을 모두 생략한다.
 - 다른 `connectType`의 단순 연결 시도 시각은 메시지를 확인했다는 근거로 사용하지 않는다. 향후 명시적인 메시지함 열람 또는 동기화 이벤트가 생기면 별도 정책으로 검토한다.
 
-`connectType` 숫자값은 현재 Desktop Client와 Messenger 사이의 legacy 계약이다. AI Orchestrator와 Omni AI Server가 이 숫자의 의미를 해석하지 않으며, Messenger Client Ingress가 이 Use Case의 적용 대상인지 판단한 뒤 검증한 값을 Trigger와 `routingRef`에 제공한다. Orchestrator의 후속 `connectionType` 확인은 복귀 사실을 재판정하는 정책이 아니라 다른 종류의 connection으로 잘못 전달하지 않기 위한 routing constraint 검증이다.
+`connectType` 숫자값은 현재 Client와 Messenger 사이의 legacy 계약이다. AI Orchestrator와 Omni AI Server가 이 숫자의 의미를 해석하지 않으며, Messenger Client Ingress가 이 Use Case의 적용 대상인지 판단한 뒤 검증한 값을 Trigger와 `routingRef`에 제공한다. Orchestrator의 후속 `connectionType` 확인은 복귀 사실을 재판정하는 정책이 아니라 다른 종류의 connection으로 잘못 전달하지 않기 위한 routing constraint 검증이다.
 
 이 문서에서 `WS`는 `WebSocket Service`, `NS`는 `TCP Service`를 의미한다. 두 물리 서비스를 포괄하는 논리적 경계는 `Messenger Client Ingress`다.
 
 ## End-to-End Flow
 
 ```text
-Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
+지원 Client(connectType 1, 2 또는 3) AWAY/OFFLINE → ONLINE
 → Presence owner
-  - 인증된 Desktop / connectType 자격 확인
+  - 인증된 connection / connectType 자격 확인
   - 상태 전이 감지
   - offlineSince / returnedAt / absencePeriodId 확정
   - USER_RETURNED 확정
@@ -66,7 +66,7 @@ Desktop Client(connectType 1 또는 2) AWAY/OFFLINE → ONLINE
 
 | Component | Responsibility |
 | --- | --- |
-| Presence owner inside Messenger Client Ingress | 인증된 Desktop `connectType 1, 2` 적용 대상 판단, `AWAY/OFFLINE → ONLINE` 전이 감지, 자리비움 구간과 `USER_RETURNED` 확정, trusted connection context 제공 |
+| Presence owner inside Messenger Client Ingress | 인증된 `connectType 1, 2, 3` 적용 대상 판단, `AWAY/OFFLINE → ONLINE` 전이 감지, 자리비움 구간과 `USER_RETURNED` 확정, trusted connection context 제공 |
 | 현재 Message owner | 내부 DB 조회 Queue를 통한 unread count, 후보 메시지 선정과 AI Context 제공 |
 | AI Orchestrator | source event contract 검증, 기능별 실행 정책 평가, 사용자 확인 lifecycle, Context Assembly, 중복 방지, AiTask와 실행 correlation 관리, callback 멱등 처리와 status reconciliation. Presence 상태 전이는 재판정하지 않음 |
 | Omni AI Server | executionId 기반 durable 실행 접수와 멱등성, process-local Queue와 ACCEPTED recovery worker, lease 만료 RUNNING 격리, 선정된 메시지의 업무 주제·우선순위 추출, terminal result 저장, callback outbox와 status query |
@@ -94,7 +94,7 @@ routingRef
   tenantId
   userId
   targetRef
-  connectionType: 1 | 2
+  connectionType: 1 | 2 | 3
 ```
 
 REST endpoint 자체가 `USER_RETURNED`를 나타내므로 현재 HTTP body에 별도 `eventType`을 두지 않는다. `routingRef.tenantId`, `routingRef.userId`가 owner의 단일 입력 출처이며 최상위에 같은 값을 중복하지 않는다. 현재 단계에서는 Messenger Client Ingress가 source-qualified service request를 구성하고, 향후 인증 계약에서는 owner를 검증된 인증 context에서 복원한다.
@@ -129,7 +129,7 @@ routingRef
   tenantId
   userId
   targetRef
-  connectionType: 1 | 2
+  connectionType: 1 | 2 | 3
 ```
 
 확인 응답은 인증된 현재 connection에서 받아야 하며 `requestId + absencePeriodId`로 중복 응답을 차단한다. `NO`는 정상 종료이고, 제한 시간 내 응답이 없으면 `EXPIRED`로 종료한다.
@@ -300,7 +300,7 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ## Result Routing
 
-확인 팝업과 AI 결과는 모든 사용자 연결에 broadcast하지 않는다. `routingRef`에 담긴 논리 target과 `connectionType`을 사용해 요청한 Desktop Client와 같은 타입의 현재 connection으로 전달한다.
+확인 팝업과 AI 결과는 모든 사용자 연결에 broadcast하지 않는다. `routingRef`에 담긴 논리 target과 `connectionType`을 사용해 요청한 Client와 같은 타입의 현재 connection으로 전달한다.
 
 - 공통 구현: Result Router가 Redis에서 현재 connection owner를 조회하고 해당 instance REST endpoint로 전달
 - Returned Message 현재 연결 상태: `ReturnedMessageResultSender`의 실제 adapter가 없어 위 공통 라우팅 경로와 아직 연결되지 않음
@@ -324,7 +324,7 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ## Scope
 
-- Presence owner의 Desktop `connectType 1, 2` 적용 대상 판단과 복귀 Event 확정
+- Presence owner의 `connectType 1, 2, 3` 적용 대상 판단과 복귀 Event 확정
 - 자리비움 구간과 장기 부재 정책
 - 현재 Service의 DB 조회 Queue를 이용한 unread 후보 선정
 - 사용자 확인 후 AI 실행
@@ -334,7 +334,7 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ## Non-scope
 
-- Desktop 이외 Client와 `connectType 1, 2` 이외 연결
+- `connectType 1, 2, 3` 이외 연결
 - 모든 사용자 connection에 대한 broadcast
 - 전체 대화 요약
 - 사용자가 정의한 반복 Schedule
@@ -343,7 +343,7 @@ subject만 사용할지 본문과 파일명까지 사용할지는 품질·개인
 
 ## Acceptance Criteria
 
-- Presence owner는 Desktop `connectType 1, 2` 이외의 연결에서 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
+- Presence owner는 `connectType 1, 2, 3` 이외의 연결에서 이 Use Case의 `USER_RETURNED` 요청을 생성하지 않는다.
 - Orchestrator는 source-confirmed `USER_RETURNED`를 상태 원시값으로 재판정하지 않는다.
 - `minAwayDuration` 미만이거나 장기 부재/만료 정책에 걸리면 실행하지 않는다.
 - 대상 unread 메시지가 없으면 확인 팝업과 LLM 호출을 수행하지 않는다.

@@ -196,7 +196,7 @@ AiTask(CLIENT_REQUESTED_AI)
 
 ```text
 Presence owner (current physical component: WebSocket Service (WS) or TCP Service (NS))
-  ├─ 인증된 Desktop / legacy connectType 1, 2 확정
+  ├─ 인증된 connection / legacy connectType 1, 2, 3 확정
   ├─ AWAY/OFFLINE → ONLINE 전이 감지
   ├─ offlineSince / returnedAt / absencePeriodId 확정
   └─ USER_RETURNED 확정
