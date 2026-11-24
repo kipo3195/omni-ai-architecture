@@ -10,6 +10,7 @@ Status: In Progress
 | --- | --- |
 | [Result Delivery](result-delivery.md) | Connection Registry, reconnect fencing, REST target resolution, local Client delivery |
 | [Pending AI Actions](pending-actions.md) | WebSocket action 전달, `sid` 기반 재접속 복구, Returned Message confirmation projection |
+| [Client AI Feature Events](client-ai-events.md) | 기능 공통 Client event envelope, lifecycle·event·revision 의미, 기능별 state와 payload mapping |
 | [User AI Settings](user-ai-settings.md) | 사용자 AI 설정 API, DB 저장, Redis cache 갱신 |
 
 ---
@@ -28,6 +29,7 @@ Status: In Progress
 - Browser JWT `sid`와 현재 connection correlation
 - REST / WebSocket 요청의 delivery target resolution
 - AI Result의 local connection lookup과 최종 전송
+- 서버 내부 `DeliveryEvent`를 기능 공통 Client AI event envelope로 변환
 - Client 후속 입력이 필요한 AI action의 실시간 전달과 인증 세션별 재접속 복구
 - 사용자 AI 설정 조회·변경과 영속화
 
@@ -39,6 +41,7 @@ Status: In Progress
 - `executionId` 생성과 execution correlation 소유
 - AI Workflow와 LLM 실행
 - 전역 Result routing decision
+- 기능 lifecycle의 authoritative 상태와 revision 결정
 
 공통 routing 계약과 전체 흐름은 [Session Registry Based AI Result Routing](../../decisions/001-session-registry-result-routing.md)에서 관리한다.
 

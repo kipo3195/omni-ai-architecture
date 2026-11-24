@@ -12,6 +12,8 @@ Status: In Progress
 
 현재 AI Orchestrator에는 Redis current-owner 조회와 owner instance REST endpoint 호출이 구현되어 있다. 이 문서가 정의하는 Messenger Client Ingress의 registry 등록, REST event 수신과 local Client delivery는 최종 End-to-End 검증이 남아 있다. Core NATS delivery는 이 프로젝트의 계획된 result delivery 경로다.
 
+Client에 최종 노출하는 AI 기능 이벤트의 공통 envelope, lifecycle ID, event ID, revision과 기능별 state mapping은 [Client AI Feature Event Contract](client-ai-events.md)를 따른다. 서버 간 `ResultEvent` / `DeliveryEvent`와 Client wire contract를 동일한 schema로 사용하지 않는다.
+
 ---
 
 ## Connection Registry
@@ -174,10 +176,29 @@ AI Event별 `scopeRef`가 필요하다면 해당 Use Case owner가 생성하거�
 2. event.userId와 local connection의 인증 주체 비교
 3. DeliveryEvent.connectionType이 있으면 local connection의 connectionType과 비교
 4. 필요한 경우 scopeRef를 shared Registry로 재검증
-5. Client protocol로 변환하여 전송
+5. `eventType`과 기능별 payload를 Client AI Feature Event envelope로 변환
+6. 변환된 Client protocol을 local connection으로 전송
 ```
 
 `clientSessionId`나 `deviceId`만 일치한다는 이유로 다른 local connection에 전달하지 않는다. `DeliveryEvent.connectionId`와 local connection의 인증 주체가 모두 일치해야 한다. Local connection이 없으면 delivery miss로 처리한다. Acknowledgement 경로가 있다면 AI Orchestrator가 Registry를 재조회할 수 있도록 miss를 반환하고, 없다면 metric과 structured log를 남긴다.
+
+### Server Event and Client Event Separation
+
+`DeliveryEvent.executionId`, 내부 `eventType`, `scopeRef`는 routing과 stale result 검증을 위해 유지한다. Client에 동일 필드가 필요하다고 가정하거나 서버 event를 그대로 직렬화하지 않는다.
+
+```text
+RETURNED_MESSAGE_TOPICS_COMPLETED
+→ type=returned_message_topic
+→ lifecycle_id=returned message requestId
+→ state=TOPICS_READY
+
+CONVERSATION_START_COMPLETED
+→ type=conversation_start
+→ lifecycle_id=current executionId
+→ state=SUGGESTIONS_READY
+```
+
+Client event의 `event_id`는 server event의 stable `eventId`를 사용한다. `revision`과 `occurred_at`은 기능 lifecycle owner가 제공한 값을 사용하며 Messenger Client Ingress가 delivery retry마다 새로 생성하지 않는다.
 
 ---
 
@@ -185,5 +206,6 @@ AI Event별 `scopeRef`가 필요하다면 해당 Use Case owner가 생성하거�
 
 - [ADR 001. Session Registry Based AI Result Routing](../../decisions/001-session-registry-result-routing.md)
 - [ADR 005. WebSocket Service Result Routing by Authenticated Client Session](../../decisions/005-websocket-realtime-client-session-result-routing.md)
+- [Client AI Feature Event Contract](client-ai-events.md)
 - [AI Orchestrator Result Router](../ai-orchestrator/result-router.md)
 - [Omni AI Server Result Event](../omni-ai-server/result-event.md)

@@ -1,6 +1,6 @@
 # Messenger Client Ingress Pending AI Actions
 
-Status: Planned
+Status: In Progress
 
 ---
 
@@ -23,7 +23,7 @@ AI Orchestrator action 생성
 
 ## Decision
 
-- Client가 알아야 할 AI action은 기능별 WebSocket event로 즉시 전달한다.
+- Client가 알아야 할 AI action은 [Client AI Feature Event Contract](client-ai-events.md)의 공통 envelope로 즉시 전달한다.
 - WebSocket으로 action을 보내기 전에 Redis에 복구 가능한 projection을 저장한다.
 - 동일 action의 중복 WebSocket 전달은 Redis의 원자적 create-if-absent 결과로 제어한다.
 - 재접속한 Client는 공통 `GET /rest/ai/pending_actions` API로 현재 `sid` 범위의 유효한 action을 조회한다.
@@ -79,27 +79,28 @@ Returned Message Topics는 인증된 connection의 `connectionType 1, 2, 3`을 �
 
 ### Client WebSocket Event
 
-Messenger Client protocol의 field name은 snake_case를 사용한다.
+Messenger Client protocol의 field name은 snake_case를 사용하고, confirmation action도 기능의 다른 상태 event와 같은 envelope를 사용한다.
 
 ```json
 {
-  "type": "returned_message_confirmation_required",
+  "type": "returned_message_topic",
   "data": {
-    "request_id": "request-1",
-    "trigger_id": "trigger-1",
-    "absence_period_id": "absence-1",
-    "outcome": "CREATED",
-    "status": "AWAITING_CONFIRMATION",
-    "unread_count": 3,
-    "confirmation_id": "confirmation-1",
-    "message_selection_ref": "selection-1",
-    "confirmation_expires_at": "2026-10-19T06:05:00Z",
-    "execution_id": null
+    "schema_version": 1,
+    "lifecycle_id": "request-1",
+    "event_id": "57b7bd77-f6e5-4adc-9e3b-3f16f964ac5f",
+    "revision": 1,
+    "state": "AWAITING_CONFIRMATION",
+    "occurred_at": "2026-10-19T06:01:00Z",
+    "payload": {
+      "confirmation_id": "confirmation-1",
+      "unread_count": 3,
+      "confirmation_expires_at": "2026-10-19T06:05:00Z"
+    }
   }
 }
 ```
 
-`request_id`, `trigger_id`, `absence_period_id`와 routing context는 Client 입력으로 다시 신뢰하지 않는다. Client confirmation을 처리할 때 인증 context와 저장된 pending projection을 기준으로 검증한다.
+`lifecycle_id`는 현재 AI Orchestrator의 `requestId`를 Client 계약으로 투영한 값이다. `trigger_id`, `absence_period_id`, `message_selection_ref`와 routing context는 Client에 노출하지 않고 pending projection에만 유지한다. Client confirmation을 처리할 때 인증 context와 저장된 pending projection을 기준으로 검증한다.
 
 ## Redis Projection
 
@@ -114,6 +115,9 @@ ai:returned-confirmation:{confirmationId}
 ```json
 {
   "action_type": "returned_message_confirmation",
+  "event_id": "57b7bd77-f6e5-4adc-9e3b-3f16f964ac5f",
+  "revision": 1,
+  "occurred_at": "2026-10-19T06:01:00Z",
   "request_id": "request-1",
   "trigger_id": "trigger-1",
   "absence_period_id": "absence-1",
@@ -131,7 +135,7 @@ ai:returned-confirmation:{confirmationId}
 
 TTL은 `confirmationExpiresAt`과 같은 절대 만료 시각에 맞춘다. Redis API가 초 단위 상대 TTL만 지원하면 저장 시점과 `confirmationExpiresAt`의 차이를 계산한다. 계산 결과가 0 이하이면 저장하거나 Client에 전달하지 않는다. 가능하면 Redis의 absolute expiration을 사용해 처리 지연과 TTL 반올림 오차를 줄인다.
 
-동일 `confirmationId`가 여러 번 도착할 수 있으므로 존재 여부 조회와 저장을 별도 명령으로 실행하지 않는다. `SET NX` 또는 Lua script로 본문 저장과 최초 도착 판정을 원자적으로 처리하고, 최초 저장에 성공한 처리만 WebSocket event를 전송한다.
+동일 `confirmationId`가 여러 번 도착할 수 있으므로 존재 여부 조회와 저장을 별도 명령으로 실행하지 않는다. `SET NX` 또는 Lua script로 본문 저장과 최초 도착 판정을 원자적으로 처리하고, 최초 저장에 성공한 처리만 WebSocket event를 전송한다. Retry 또는 reconnect recovery에서는 저장된 `event_id`, `revision`, `occurred_at`을 그대로 사용한다.
 
 ```text
 create-if-absent = true
@@ -188,17 +192,19 @@ Messenger Client Ingress는 Access Token을 검증한 뒤 `tenantId`, `userId`, 
     "next_cursor": null,
     "items": [
       {
-        "action_type": "returned_message_confirmation",
-        "action_id": "confirmation-1",
-        "status": "AWAITING_CONFIRMATION",
-        "expires_at": "2026-10-19T06:05:00Z",
-        "payload": {
-          "request_id": "request-1",
-          "trigger_id": "trigger-1",
-          "absence_period_id": "absence-1",
-          "confirmation_id": "confirmation-1",
-          "message_selection_ref": "selection-1",
-          "unread_count": 3
+        "type": "returned_message_topic",
+        "data": {
+          "schema_version": 1,
+          "lifecycle_id": "request-1",
+          "event_id": "57b7bd77-f6e5-4adc-9e3b-3f16f964ac5f",
+          "revision": 1,
+          "state": "AWAITING_CONFIRMATION",
+          "occurred_at": "2026-10-19T06:01:00Z",
+          "payload": {
+            "confirmation_id": "confirmation-1",
+            "unread_count": 3,
+            "confirmation_expires_at": "2026-10-19T06:05:00Z"
+          }
         }
       }
     ]
@@ -226,9 +232,9 @@ Messenger Client Ingress는 Access Token을 검증한 뒤 `tenantId`, `userId`, 
 
 조회 성공은 action 처리 완료 acknowledgement가 아니다. 조회만으로 projection을 삭제하거나 `AWAITING_CONFIRMATION` 상태를 변경하지 않는다.
 
-## Client Confirmation Placeholder
+## Client Confirmation Adapter
 
-현재 Messenger Client Ingress는 향후 confirmation 후속 처리를 연결하기 위한 임시 API를 유지한다.
+현재 Messenger Client Ingress 구현은 다음 API에서 `confirmationId`, `decision`을 받아 pending projection을 검증하고 AI Orchestrator confirmation API로 연결한다.
 
 ```http
 POST /rest/return_message_confirmation
@@ -238,12 +244,27 @@ Content-Type: application/json
 
 ```json
 {
-  "confirmation": true,
-  "key": "confirmation-1"
+  "confirmationId": "confirmation-1",
+  "decision": "YES"
 }
 ```
 
-현재 구현은 인증된 `userId`, `confirmation`, `key`를 검증하고 로깅한 뒤 공통 성공 응답을 반환한다. DB를 변경하거나 AI Orchestrator confirmation API를 호출하지 않는다. 이 API를 실제 사용자 결정 처리로 전환할 때는 pending projection의 `userId`, `clientSessionId`, 만료 시각과 상태를 먼저 검증하고, AI Orchestrator 후속 호출 및 멱등 상태 전이를 함께 구현한다.
+공통 Client event 계약으로 전환한 Target API는 lifecycle을 path에서 함께 검증한다.
+
+```http
+POST /rest/ai/returned-message-topics/{lifecycleId}/confirmations
+Authorization: Bearer {accessToken}
+Content-Type: application/json
+```
+
+```json
+{
+  "confirmation_id": "confirmation-1",
+  "decision": "YES"
+}
+```
+
+Messenger Client Ingress는 `lifecycleId == projection.requestId`를 추가로 검증하고 `absencePeriodId`, `messageSelectionRef`, routing context는 projection과 인증 context에서 복원한다. 기존 endpoint는 Client capability 전환 기간에 compatibility adapter로 유지할 수 있다.
 
 ## Authentication Session Scope
 
@@ -277,14 +298,15 @@ Projection 저장과 absence 삭제 사이의 crash window까지 제거하려면
 
 ## Deferred
 
-- Messenger Client confirmation을 AI Orchestrator의 `POST /api/v1/returned-messages/{requestId}/confirmations`로 연결하는 adapter 구현
-- confirmation 완료 후 pending projection 상태 전이와 제거 시점의 세부 구현
+- 공통 Client event capability와 legacy serializer의 전환 시점 확정
+- confirmation 완료 후 pending projection의 상태 snapshot 또는 tombstone 유지 정책
 - user-scoped pending action 복구 또는 새 `sid`로의 action rebinding
 - 기능 공통 pending action Redis abstraction과 Lua script의 구체적 구현 위치
 
 ## Related
 
 - [Messenger Client Ingress Result Delivery](result-delivery.md)
+- [Client AI Feature Event Contract](client-ai-events.md)
 - [Returned Message Topics](../../use-cases/02-returned-message-topics.md)
 - [WebSocket Service Result Routing by Authenticated Client Session](../../decisions/005-websocket-realtime-client-session-result-routing.md)
 - [Durable Asynchronous AI Execution and Result Reconciliation](../../decisions/008-durable-asynchronous-ai-execution-and-result-reconciliation.md)
